@@ -1,0 +1,8 @@
+// Kept PTX excerpt (fixture). Grounding: compiled.
+{
+  .reg .pred p;
+WAIT_FULL:
+  mbarrier.try_wait.parity.acquire.cta.shared::cta.b64 p, [%r_full], %r_ph;
+  @!p bra WAIT_FULL;
+}
+// elect + tcgen05 / mma issue sites omitted for brevity in the UX fixture
