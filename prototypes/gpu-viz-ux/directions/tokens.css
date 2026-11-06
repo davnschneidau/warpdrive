@@ -1,0 +1,74 @@
+/* Approximates DeepSeek Harness --dsw-* light theme for design probes. */
+:root {
+  --bg: rgb(249, 250, 251);
+  --bg-1: rgb(255, 255, 255);
+  --bg-2: rgb(245, 246, 247);
+  --bg-3: rgb(237, 240, 244);
+  --text: rgb(15, 15, 15);
+  --text-2: rgb(84, 85, 87);
+  --text-3: rgb(127, 130, 135);
+  --border: rgba(0, 0, 0, 0.1);
+  --border-2: rgba(0, 0, 0, 0.06);
+  --brand: rgb(65, 118, 230);
+  --brand-soft: rgba(65, 118, 230, 0.1);
+  --brand-ink: rgb(14, 48, 116);
+  --ok: rgb(34, 197, 94);
+  --warn: rgb(245, 158, 11);
+  --danger: rgb(239, 68, 68);
+  --producer: rgb(65, 118, 230);
+  --mma: rgb(124, 58, 237);
+  --epilogue: rgb(14, 165, 160);
+  --smem: rgb(245, 158, 11);
+  --hbm: rgb(100, 116, 139);
+  --font: "SF Pro Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  --radius: 12px;
+  --elev: 0 0 0 0.5px rgba(0,0,0,0.08), 0 10px 28px rgba(15,15,15,0.06);
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+  line-height: 1.45;
+}
+button {
+  font: inherit;
+  cursor: pointer;
+  border: 0.5px solid var(--border);
+  background: var(--bg-1);
+  border-radius: 8px;
+  color: var(--text-2);
+  padding: 7px 11px;
+}
+button:hover { background: var(--bg-2); }
+button.active, button.primary {
+  background: var(--brand-soft);
+  color: var(--brand);
+  border-color: transparent;
+}
+button:disabled { opacity: 0.4; cursor: default; }
+.mono { font-family: var(--mono); }
+.muted { color: var(--text-3); }
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--bg-2);
+  color: var(--text-2);
+}
+.pill.compiled { background: rgba(34,197,94,0.12); color: rgb(21,128,61); }
+.pill.annotated { background: rgba(65,118,230,0.12); color: rgb(37,99,235); }
+.pill.modeled { background: rgba(245,158,11,0.14); color: rgb(180,83,9); }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}

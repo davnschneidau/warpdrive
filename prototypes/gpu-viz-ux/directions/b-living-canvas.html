@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Direction B · Living Kernel Canvas</title>
+  <link rel="stylesheet" href="./tokens.css" />
+  <style>
+    body { height: 100vh; min-width: 1280px; display: grid; grid-template-rows: 48px 1fr; }
+    .top {
+      display: flex; align-items: center; gap: 12px; padding: 0 16px;
+      border-bottom: 0.5px solid var(--border); background: var(--bg-1);
+    }
+    .brand { font-weight: 600; }
+    .brand span { color: var(--text-3); font-weight: 500; margin-left: 8px; }
+    .grow { flex: 1; }
+    .workspace {
+      position: relative; min-height: 0; background: #eef1f5;
+      overflow: hidden;
+    }
+    .canvas-wrap {
+      position: absolute; inset: 0; overflow: hidden;
+      cursor: grab;
+    }
+    .canvas-wrap:active { cursor: grabbing; }
+    svg.living { transform-origin: 0 0; }
+    .hud {
+      position: absolute; left: 16px; top: 16px; width: 320px;
+      background: rgba(255,255,255,0.92); backdrop-filter: blur(12px);
+      border-radius: 14px; box-shadow: var(--elev); padding: 12px 14px;
+      border: 0.5px solid var(--border-2); z-index: 3;
+    }
+    .hud h1 { margin: 0 0 6px; font-size: 15px; }
+    .hud p { margin: 0 0 10px; color: var(--text-2); }
+    .hud .row { display: flex; gap: 6px; flex-wrap: wrap; }
+    .drawer {
+      position: absolute; right: 0; top: 0; bottom: 0; width: 380px;
+      background: var(--bg-1); border-left: 0.5px solid var(--border);
+      box-shadow: -12px 0 32px rgba(0,0,0,0.04); z-index: 4;
+      display: flex; flex-direction: column; transform: translateX(0);
+      transition: transform 180ms ease;
+    }
+    .drawer.closed { transform: translateX(100%); }
+    .drawer .tabs { display: flex; gap: 4px; padding: 10px; border-bottom: 0.5px solid var(--border-2); }
+    .drawer .body { flex: 1; overflow: auto; padding: 12px 14px; }
+    .code {
+      font-family: var(--mono); font-size: 12px; white-space: pre-wrap; color: var(--text-2); line-height: 1.55;
+    }
+    .code .hl { background: rgba(65,118,230,0.14); border-radius: 3px; }
+    .chat-dock {
+      position: absolute; left: 16px; bottom: 16px; width: min(420px, 36vw);
+      max-height: 28vh; overflow: auto; z-index: 3;
+      background: rgba(255,255,255,0.94); backdrop-filter: blur(12px);
+      border-radius: 14px; box-shadow: var(--elev); padding: 12px;
+      border: 0.5px solid var(--border-2);
+    }
+    .msg { margin-bottom: 8px; }
+    .msg .b { padding: 8px 10px; border-radius: 12px; background: var(--bg-2); color: var(--text-2); }
+    .msg.user .b { background: rgb(237,243,254); color: var(--brand-ink); }
+    .zoom {
+      position: absolute; right: 400px; bottom: 16px; z-index: 3;
+      display: flex; gap: 6px;
+    }
+    .drawer.closed ~ .zoom { right: 16px; }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="brand">DeepSeek Harness <span>Direction B · Living Kernel Canvas</span></div>
+    <button data-act="explain" class="primary">Explain GEMM</button>
+    <button data-act="step">Advance stage</button>
+    <button data-act="tile">Where is the tile?</button>
+    <button data-act="change">+1 stage change</button>
+    <button data-act="toggle">Toggle code dock</button>
+    <div class="grow"></div>
+    <a href="./index.html" style="color:var(--brand);text-decoration:none;font-weight:500">All directions</a>
+  </header>
+  <div class="workspace">
+    <div class="hud">
+      <h1 id="hud-title">Living memory machine</h1>
+      <p id="hud-body">Pan the canvas. Tensors, TMA beams, SMEM banks, and Tensor Cores are spatial — click any region.</p>
+      <div class="row">
+        <span class="pill annotated">annotated</span>
+        <span class="pill modeled">modeled flow</span>
+        <span class="pill compiled">compiled budget</span>
+      </div>
+    </div>
+    <div class="canvas-wrap" id="wrap">
+      <svg class="living" id="svg" width="1600" height="1000" viewBox="0 0 1600 1000"></svg>
+    </div>
+    <div class="chat-dock" id="chat"></div>
+    <div class="zoom">
+      <button data-act="zin">Zoom +</button>
+      <button data-act="zout">Zoom −</button>
+      <button data-act="reset">Reset view</button>
+    </div>
+    <aside class="drawer" id="drawer">
+      <div class="tabs">
+        <button class="active" data-tab="code">Code</button>
+        <button data-tab="ptx">PTX</button>
+        <button data-tab="sass">SASS</button>
+        <button data-tab="res">Resources</button>
+      </div>
+      <div class="body"><pre class="code" id="dock"></pre></div>
+    </aside>
+  </div>
+  <script>
+const view = { x: -40, y: -20, s: 0.92 };
+const state = { phase: 0, focus: 'overview', drawer: true, tab: 'code', highlight: null };
+
+const DOCK = {
+  code: `producer:
+  mbar_wait(empty[stage])
+  <span class="hl">tma_load_2d(a[stage], ...)</span>
+  tma_load_2d(b[stage], ...)
+
+mma_issuer:
+  <span class="hl">mbar_wait(full[stage])</span>
+  umma_nvfp4(acc, a, b, ...)
+
+epilogue:
+  tmem_ld → cvt_bf16 → tma_store`,
+  ptx: `mbarrier.try_wait.parity...
+cp.async.bulk.tensor.2d...
+tcgen05.mma / UTCOMMA  (fixture)`,
+  sass: `SYNCS.PHASECHK.TRANS64.TRYWAIT
+UTMALDG.2D
+UTCOMMA ...
+UTCBAR`,
+  res: `ptxas: Used 168 registers, 248576 bytes smem
+launch_bounds(384,1) → 168 regs/thread
+STAGES=4 · STAGE_BYTES≈55KB`,
+};
+
+function bankCells(x, y, cols, rows, filledCols, hotCol) {
+  let s = '';
+  const cw = 14, rh = 18;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const filled = c < filledCols;
+      const hot = c === hotCol && filled;
+      s += `<rect x="${x + c * cw}" y="${y + r * rh}" width="${cw - 1.5}" height="${rh - 1.5}" rx="2"
+        fill="${hot ? '#416ee6' : filled ? 'rgba(65,118,230,0.55)' : 'rgba(15,15,15,0.04)'}"
+        stroke="rgba(0,0,0,0.06)"/>`;
+    }
+  }
+  return s;
+}
+
+function tensorBlock(x, y, w, h, label, sub, emphasizeRect) {
+  let cells = '';
+  const cols = 16, rows = 10;
+  const cw = w / cols, rh = h / rows;
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    const inTile = emphasizeRect && c >= emphasizeRect.c0 && c < emphasizeRect.c1 && r >= emphasizeRect.r0 && r < emphasizeRect.r1;
+    cells += `<rect x="${x + c * cw}" y="${y + r * rh}" width="${cw - 0.6}" height="${rh - 0.6}"
+      fill="${inTile ? 'rgba(65,118,230,0.75)' : ((r + c) % 2 ? 'rgba(100,116,139,0.25)' : 'rgba(100,116,139,0.12)')}"/>`;
+  }
+  return `<g>
+    <rect x="${x - 8}" y="${y - 28}" width="${w + 16}" height="${h + 48}" rx="14" fill="rgba(255,255,255,0.7)" stroke="rgba(0,0,0,0.08)"/>
+    <text x="${x}" y="${y - 10}" font-size="13" font-weight="600">${label}</text>
+    <text x="${x + w - 4}" y="${y - 10}" font-size="11" fill="#848587" text-anchor="end">${sub}</text>
+    ${cells}
+  </g>`;
+}
+
+function renderSvg() {
+  const p = state.phase;
+  const filled = p === 0 ? 0 : Math.min(4, p);
+  const hot = p >= 1 ? Math.min(3, p - 1) : -1;
+  const showTile = state.focus === 'tile' || p >= 1;
+  const conflict = p >= 5;
+
+  const beamOpacity = p >= 1 && p < 4 ? 1 : 0.15;
+  const svg = `
+    <!-- HBM -->
+    <g class="hit" data-id="tensorA">${tensorBlock(60, 80, 260, 160, 'HBM · Tensor A', 'K-major', showTile ? { c0: 2, c1: 8, r0: 1, r1: 7 } : null)}</g>
+    <g class="hit" data-id="tensorB">${tensorBlock(60, 320, 300, 160, 'HBM · Tensor B', 'K-major', showTile ? { c0: 1, c1: 10, r0: 2, r1: 8 } : null)}</g>
+
+    <!-- TMA beams -->
+    <path d="M330 160 C420 160, 480 220, 560 260" fill="none" stroke="#416ee6" stroke-width="3" opacity="${beamOpacity}" stroke-linecap="round"
+      stroke-dasharray="10 8">
+      ${p === 1 || p === 2 ? '<animate attributeName="stroke-dashoffset" values="36;0" dur="1s" repeatCount="indefinite"/>' : ''}
+    </path>
+    <path d="M370 400 C460 400, 500 340, 560 300" fill="none" stroke="#416ee6" stroke-width="3" opacity="${beamOpacity}" stroke-linecap="round"
+      stroke-dasharray="10 8"></path>
+    <text x="420" y="240" font-size="12" font-weight="600" fill="#416ee6" opacity="${beamOpacity}">TMA multicast</text>
+
+    <!-- SMEM banks -->
+    <g class="hit" data-id="smem">
+      <rect x="540" y="180" width="${conflict ? 320 : 260}" height="280" rx="18" fill="rgba(255,255,255,0.85)" stroke="rgba(245,158,11,0.45)" stroke-width="1.5"/>
+      <text x="560" y="208" font-size="14" font-weight="600" fill="#b45309">SMEM ring ${conflict ? '(5 stages — conflict)' : '(4 stages)'}</text>
+      <text x="560" y="228" font-size="11" fill="#848587">each column = stage · cells = 128B swizzle atoms (schematic)</text>
+      ${bankCells(560, 250, conflict ? 5 : 4, 8, filled, hot)}
+      <text x="560" y="430" font-size="12" fill="#545557">${filled ? `Stages 0..${filled - 1} hold live A/B/SF tiles` : 'Empty ring — waiting for producer'}</text>
+      ${conflict ? `<text x="560" y="448" font-size="12" fill="#dc2626" font-weight="600">303 KB &gt; 256 KB operand window</text>` : ''}
+    </g>
+
+    <!-- Warp specialization strip beside SMEM -->
+    <g class="hit" data-id="warps">
+      <rect x="880" y="180" width="200" height="280" rx="18" fill="rgba(255,255,255,0.85)" stroke="rgba(0,0,0,0.08)"/>
+      <text x="900" y="208" font-size="13" font-weight="600">Warp roles</text>
+      ${roleRow(900, 230, 'Producer', '#416ee6', p <= 2)}
+      ${roleRow(900, 300, 'MMA issuer', '#7c3aed', p >= 3 && p < 5)}
+      ${roleRow(900, 370, 'Epilogue', '#0ea5a0', p >= 4 && p < 5)}
+    </g>
+
+    <!-- Tensor core -->
+    <g class="hit" data-id="tc">
+      <rect x="1120" y="200" width="220" height="160" rx="18"
+        fill="${p >= 3 && p < 5 ? 'rgba(124,58,237,0.12)' : 'rgba(255,255,255,0.85)'}"
+        stroke="rgba(124,58,237,0.35)" stroke-width="1.5"/>
+      <text x="1140" y="228" font-size="13" font-weight="600" fill="#7c3aed">Tensor Core</text>
+      <text x="1140" y="248" font-size="11" fill="#848587">documented atom · NVFP4 path</text>
+      ${tcMatrix(1140, 270, p >= 3 && p < 5)}
+    </g>
+
+    <!-- Accumulators / store -->
+    <g class="hit" data-id="acc">
+      <rect x="1120" y="400" width="100" height="80" rx="12" fill="${p >= 3 ? 'rgba(124,58,237,0.18)' : '#fff'}" stroke="rgba(0,0,0,0.08)"/>
+      <text x="1135" y="425" font-size="11">acc0</text>
+      <rect x="1240" y="400" width="100" height="80" rx="12" fill="${p >= 4 ? 'rgba(14,165,160,0.18)' : '#fff'}" stroke="rgba(0,0,0,0.08)"/>
+      <text x="1255" y="425" font-size="11">acc1 / store</text>
+    </g>
+
+    <text x="60" y="560" font-size="12" fill="#848587">Pan · scroll-zoom · click regions. This canvas is the primary programming surface; code docks beside it.</text>
+  `;
+  const el = document.getElementById('svg');
+  el.innerHTML = svg;
+  el.style.transform = `translate(${view.x}px,${view.y}px) scale(${view.s})`;
+  document.querySelectorAll('.hit').forEach(g => {
+    g.style.cursor = 'pointer';
+    g.addEventListener('click', (e) => {
+      e.stopPropagation();
+      state.highlight = g.getAttribute('data-id');
+      state.drawer = true;
+      if (state.highlight === 'smem' || state.highlight === 'tensorA') state.tab = 'code';
+      if (state.highlight === 'tc') state.tab = 'sass';
+      push('user', `Inspect ${state.highlight}`);
+      push('ai', explain(state.highlight));
+      hud();
+      dock();
+      renderSvg();
+    });
+  });
+}
+
+function roleRow(x, y, label, color, on) {
+  let dots = '';
+  for (let i = 0; i < 32; i++) {
+    dots += `<circle cx="${x + (i % 16) * 8}" cy="${y + 28 + Math.floor(i / 16) * 8}" r="2.4" fill="${color}" opacity="${on ? 1 : 0.25}"/>`;
+  }
+  return `<text x="${x}" y="${y}" font-size="12" font-weight="600" fill="${color}">${label}</text>
+    <text x="${x}" y="${y + 14}" font-size="10" fill="#848587">${on ? 'active this beat' : 'annotated role'}</text>${dots}`;
+}
+
+function tcMatrix(x, y, on) {
+  let s = '';
+  for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
+    s += `<rect x="${x + j * 28}" y="${y + i * 18}" width="24" height="14" rx="3"
+      fill="${on ? `rgba(124,58,237,${0.35 + ((i + j) % 3) * 0.2})` : 'rgba(0,0,0,0.05)'}"/>`;
+  }
+  return s;
+}
+
+function explain(id) {
+  return ({
+    tensorA: 'HBM tensor drawn as cells. Blue highlight is the annotated tile footprint being staged — spatial, not a label.',
+    tensorB: 'Partner B tile footprint. TMA beams (modeled) carry both into the SMEM ring.',
+    smem: 'Shared-memory ring: columns are pipeline stages; cells suggest swizzle atoms. Filled columns are live tiles.',
+    warps: 'Lane dots show which specialized warp is active in this beat. Roles remain annotated intent.',
+    tc: 'Tensor Core region lights when MMA issues. Bound to documented atoms + SASS fixture.',
+    acc: 'Double-buffered accumulators: fill vs drain made visible as two panels.',
+  })[id] || 'Region selected.';
+}
+
+function hud() {
+  const titles = [
+    ['Overview', 'HBM tensors sit left; SMEM ring is the working set; Tensor Cores right.'],
+    ['Loader beat', 'TMA beams animate into stage 0. Tile footprints light on HBM.'],
+    ['Ring deepening', 'More stages fill — ownership still via barriers (see code dock).'],
+    ['MMA live', 'Tensor Core matrix lights; producer may still prefetch ahead.'],
+    ['Epilogue', 'acc1/store path engages while compute continues — overlap made spatial.'],
+    ['Failed +1 stage', 'Fifth column appears but budget conflicts — refuse a fake happy path.'],
+  ];
+  const t = titles[Math.min(state.phase, titles.length - 1)];
+  document.getElementById('hud-title').textContent = t[0];
+  document.getElementById('hud-body').textContent = t[1];
+  document.getElementById('drawer').classList.toggle('closed', !state.drawer);
+}
+
+function dock() {
+  document.getElementById('dock').innerHTML = DOCK[state.tab] || '';
+  document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('active', b.getAttribute('data-tab') === state.tab));
+}
+
+const chat = document.getElementById('chat');
+function push(who, text) {
+  const d = document.createElement('div');
+  d.className = 'msg ' + who;
+  d.innerHTML = `<div class="b">${text}</div>`;
+  chat.appendChild(d);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+document.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => {
+  const a = b.getAttribute('data-act');
+  if (a === 'explain') {
+    state.phase = 0; state.focus = 'overview';
+    push('user', 'Explain how this GEMM maps onto the GPU.');
+    push('ai', 'Living canvas: tensors and SMEM are spatial. I will advance stages; click any region to bind code/SASS.');
+  } else if (a === 'step') {
+    state.phase = Math.min(4, state.phase + 1);
+    push('user', 'Advance the pipeline.');
+    push('ai', 'Stage state updated. Watch which SMEM columns fill and which warp lanes ignite.');
+  } else if (a === 'tile') {
+    state.focus = 'tile'; state.phase = Math.max(1, state.phase);
+    push('user', 'Where is this tensor tile stored?');
+    push('ai', 'Highlighting the tile footprint on HBM and its resident stage column in SMEM — same Scene IR bindings, richer metaphor.');
+  } else if (a === 'change') {
+    state.phase = 5;
+    push('user', 'What if I add a pipeline stage?');
+    push('ai', 'Canvas grows a fifth stage column, then marks the compiled SMEM-window conflict. No invented throughput win.');
+  } else if (a === 'toggle') {
+    state.drawer = !state.drawer;
+  } else if (a === 'zin') view.s = Math.min(1.6, view.s + 0.1);
+  else if (a === 'zout') view.s = Math.max(0.6, view.s - 0.1);
+  else if (a === 'reset') { view.x = -40; view.y = -20; view.s = 0.92; }
+  hud(); dock(); renderSvg();
+}));
+
+document.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => {
+  state.tab = b.getAttribute('data-tab'); dock();
+}));
+
+// pan
+(() => {
+  const wrap = document.getElementById('wrap');
+  let down = false, lx = 0, ly = 0;
+  wrap.addEventListener('pointerdown', e => { down = true; lx = e.clientX; ly = e.clientY; });
+  window.addEventListener('pointerup', () => down = false);
+  window.addEventListener('pointermove', e => {
+    if (!down) return;
+    view.x += e.clientX - lx; view.y += e.clientY - ly; lx = e.clientX; ly = e.clientY;
+    renderSvg();
+  });
+  wrap.addEventListener('wheel', e => {
+    e.preventDefault();
+    view.s = Math.min(1.6, Math.max(0.55, view.s * (e.deltaY > 0 ? 0.95 : 1.05)));
+    renderSvg();
+  }, { passive: false });
+})();
+
+push('ai', 'Direction B: the investigation canvas is primary. Code is a dock, chat is a floating collaborator.');
+hud(); dock(); renderSvg();
+  </script>
+</body>
+</html>
