@@ -21,7 +21,11 @@ describe('validateGpuEvidence', () => {
 
   it('rejects measured fixture metrics without sourceArtifact', () => {
     const bad = structuredClone(baseline)
-    bad.metrics[0]!.sourceArtifact = undefined
+    const metric = bad.metrics[0]
+    expect(metric).toBeDefined()
+    if (metric === undefined) return
+    const { sourceArtifact: _drop, ...rest } = metric
+    bad.metrics[0] = rest
     const result = validateGpuEvidence(bad)
     expect(result.ok).toBe(false)
     expect(result.issues.some(i => i.path.includes('sourceArtifact'))).toBe(true)
