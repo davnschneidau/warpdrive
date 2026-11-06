@@ -9,6 +9,7 @@ Captured at ~1440×900 and ~1920×1080 after implementing the synthesis.
 | Open source | `captures/wb_1440_source.webp` |
 | Overview | `captures/wb_1440_overview.webp` |
 | Selected wait @1920 | `captures/wb_1920_selected.webp` |
+| Coverage gaps (missing evidence) | `captures/wb_1440_gaps.png`, `captures/wb_1920_gaps.png` |
 
 ## Checklist
 
@@ -27,8 +28,14 @@ Captured at ~1440×900 and ~1920×1080 after implementing the synthesis.
 - Consumer wait stays partially visible while following producer (`wait.dimmed` opacity 0.42).
 - Split **Inferred** (from edge+durations) vs **Hypothesis** (what to try next).
 
+## Coverage gaps review
+
+- Banner states “not a performance diagnosis” before any SM row.
+- Pair stage hidden; rail + coverage decomposition own the frame.
+- Tabular miss % per SM; click rail to re-focus gap SM.
+- Explicit waits (striped) remain visually distinct from unobserved track fill.
+
 ## Remaining craft debt
 
 - True zoom/pan scrubber (window is mode-presets today).
-- Missing-evidence dedicated empty state page.
 - Port this composition into `client-ui-gpu-investigation` for megakernel mode (memory dock remains a separate investigation).

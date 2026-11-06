@@ -106,6 +106,48 @@
       position: absolute; top: 2px; bottom: 2px; background: var(--work-soft); opacity: .35; border-radius: 1px;
     }
     .silhouette.dim { opacity: .45; }
+    .silhouette.gap-focus {
+      opacity: 1;
+      outline: 1px solid color-mix(in srgb, var(--wait) 35%, var(--line));
+      outline-offset: 4px;
+      padding: 4px 6px;
+      margin-left: -6px;
+      margin-right: -6px;
+    }
+    .silhouette .track .gap-fill {
+      position: absolute; inset: 0; background:
+        repeating-linear-gradient(90deg, transparent, transparent 6px, rgba(20,20,20,.06) 6px, rgba(20,20,20,.06) 7px);
+      pointer-events: none;
+    }
+    .gap-banner {
+      border: 1px solid color-mix(in srgb, var(--wait) 40%, var(--line));
+      background: color-mix(in srgb, var(--wait) 8%, var(--panel));
+      padding: 12px 14px; margin: 0 0 16px; border-radius: 2px;
+      max-width: 72ch;
+    }
+    .gap-banner strong { font-weight: 600; }
+    .gap-banner p { margin: 4px 0 0; color: var(--ink-2); }
+    .pair.gaps-mode { display: none; }
+    .gaps-strip {
+      display: none;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      padding: 14px 16px;
+      border-radius: 2px;
+      margin-top: 8px;
+    }
+    body.mode-gaps .gaps-strip { display: block; }
+    body.mode-gaps .silhouette {
+      grid-template-columns: 88px 1fr 120px;
+      min-height: 36px;
+      margin-bottom: 10px;
+    }
+    body.mode-gaps .silhouette .track { height: 26px; }
+    .silhouette .miss-meta {
+      font-family: var(--mono); font-size: 11px; color: var(--ink-3);
+      text-align: right; font-variant-numeric: tabular-nums;
+    }
+    .silhouette.gap-focus .miss-meta { color: var(--ink); font-weight: 500; }
 
     .pair {
       position: relative; display: grid; gap: 0;
@@ -258,6 +300,7 @@
         <button type="button" class="primary" id="btnFocus" aria-pressed="true">Focus wait</button>
         <button type="button" id="btnProducer">Follow producer</button>
         <button type="button" id="btnSource">Open source</button>
+        <button type="button" id="btnGaps">Coverage gaps</button>
       </div>
     </header>
 
@@ -277,6 +320,7 @@
         <section class="actor producer" id="actorProducer"></section>
         <section class="actor consumer" id="actorConsumer"></section>
       </div>
+      <div class="gaps-strip" id="gapsStrip" aria-live="polite"></div>
     </main>
 
     <aside class="inspector" id="inspector" aria-live="polite"></aside>
@@ -284,6 +328,7 @@
 
   <script type="module">
 import {
+  deriveFindings,
   explainSelection,
   normalizeTrace,
   smCoverage,
@@ -296,10 +341,11 @@ const PRODUCER_ID = 'span-sm0-mma-i1';
 
 const state = {
   trace: null,
-  mode: 'focus', // overview | focus | producer | source
+  mode: 'focus', // overview | focus | producer | source | gaps
   selected: { type: 'wait', id: WAIT_ID },
   viewStart: 0,
   viewEnd: 520,
+  gapSm: null,
 };
 
 function pct(t, a, b) {
@@ -323,20 +369,52 @@ function setMode(mode) {
     state.viewStart = 0;
     state.viewEnd = state.window;
     state.selected = null;
+    state.gapSm = null;
   } else if (mode === 'focus') {
     state.selected = { type: 'wait', id: WAIT_ID };
     state.viewStart = 80;
     state.viewEnd = 480;
+    state.gapSm = null;
   } else if (mode === 'producer') {
     state.selected = { type: 'span', id: PRODUCER_ID };
     state.viewStart = 160;
     state.viewEnd = 480;
+    state.gapSm = null;
+  } else if (mode === 'source') {
+    state.selected = { type: 'wait', id: WAIT_ID };
+    state.viewStart = 80;
+    state.viewEnd = 480;
+    state.gapSm = null;
+  } else if (mode === 'gaps') {
+    state.selected = null;
+    state.viewStart = 0;
+    state.viewEnd = state.window || 520;
+    state.gapSm = pickGapSm();
   }
   document.getElementById('btnOverview').setAttribute('aria-pressed', String(mode === 'overview'));
   document.getElementById('btnFocus').setAttribute('aria-pressed', String(mode === 'focus'));
   document.getElementById('btnProducer').setAttribute('aria-pressed', String(mode === 'producer'));
   document.getElementById('btnSource').setAttribute('aria-pressed', String(mode === 'source'));
+  document.getElementById('btnGaps').setAttribute('aria-pressed', String(mode === 'gaps'));
   render();
+}
+
+function pickGapSm() {
+  if (!state.trace) return null;
+  const norm = normalizeTrace(state.trace);
+  const coverage = smCoverage({ ...state.trace, spans: norm.spans, waits: norm.waits });
+  let best = null;
+  let bestPct = -1;
+  for (const [smStr, cov] of Object.entries(coverage.bySm)) {
+    const sm = Number(smStr);
+    if (cov.window <= 0) continue;
+    const pctU = cov.unobserved / cov.window;
+    if (pctU > bestPct) {
+      bestPct = pctU;
+      best = sm;
+    }
+  }
+  return best;
 }
 
 function renderAxis() {
@@ -350,23 +428,92 @@ function renderAxis() {
     `window ${Math.round(state.viewStart)}–${Math.round(state.viewEnd)} / ${state.window} ticks (origin-normalized)`;
 }
 
-function renderSilhouettes(norm, taskById) {
+function renderSilhouettes(norm, taskById, coverage) {
   const root = document.getElementById('silhouettes');
   const focusPair = new Set([0, 3]);
   const html = [];
+  if (state.mode === 'gaps') {
+    const findings = deriveFindings({ ...state.trace, spans: norm.spans, waits: norm.waits })
+      .findings
+      .filter((f) => f.kind === 'coverage');
+    const focus = findings.find((f) => f.sm === state.gapSm) || findings[0];
+    html.push(`<div class="gap-banner" id="gapBanner">
+      <strong>Missing evidence — not a performance diagnosis</strong>
+      <p>${focus
+        ? focus.detail
+        : 'No SM exceeds the unobserved threshold in this capture window.'}</p>
+    </div>`);
+  }
   for (let sm = 0; sm < state.trace.device.smCount; sm++) {
-    if (focusPair.has(sm)) continue;
+    // Causal pair owns the stage except in gaps mode, where every SM is comparable.
+    if (focusPair.has(sm) && state.mode !== 'gaps') continue;
     const spans = norm.spans.filter((s) => s.sm === sm && inView(s.start, s.end));
     const waits = norm.waits.filter((w) => w.sm === sm && inView(w.start, w.end));
-    html.push(`<div class="silhouette ${state.mode !== 'overview' ? 'dim' : ''}">
-      <div class="actor-title" style="color:var(--ink-3)">SM ${sm}</div>
-      <div class="track">
+    const cov = coverage.bySm[sm];
+    const gapFocus = state.mode === 'gaps' && sm === state.gapSm;
+    const dim = state.mode !== 'overview' && state.mode !== 'gaps'
+      ? 'dim'
+      : state.mode === 'gaps' && !gapFocus
+        ? 'dim'
+        : '';
+    const missPct = cov && cov.window ? Math.round((100 * cov.unobserved) / cov.window) : 0;
+    const missLabel = cov ? `${cov.unobserved} miss · ${missPct}%` : '';
+    html.push(`<div class="silhouette ${dim} ${gapFocus ? 'gap-focus' : ''}" data-sm="${sm}">
+      <div class="actor-title" style="color:var(--ink-3)">SM ${sm}${gapFocus ? ' · gap' : ''}</div>
+      <div class="track" title="${missLabel}">
+        <span class="gap-fill" aria-hidden="true"></span>
         ${spans.map((s) => `<span class="tick" style="${bandStyle(s.start, s.end)}"></span>`).join('')}
         ${waits.map((w) => `<span class="tick" style="${bandStyle(w.start, w.end)};background:var(--wait);opacity:.55"></span>`).join('')}
       </div>
+      ${state.mode === 'gaps' ? `<div class="miss-meta">${missLabel}</div>` : ''}
     </div>`);
   }
   root.innerHTML = html.join('');
+  if (state.mode === 'gaps') {
+    root.querySelectorAll('.silhouette[data-sm]').forEach((el) => {
+      el.style.cursor = 'pointer';
+      el.addEventListener('click', () => {
+        state.gapSm = Number(el.getAttribute('data-sm'));
+        render();
+      });
+    });
+  }
+}
+
+function renderGapsStrip(coverage) {
+  const el = document.getElementById('gapsStrip');
+  if (!el) return;
+  if (state.mode !== 'gaps' || state.gapSm == null) {
+    el.innerHTML = '';
+    return;
+  }
+  const sm = state.gapSm;
+  const cov = coverage.bySm[sm];
+  if (!cov) {
+    el.innerHTML = '';
+    return;
+  }
+  const w = cov.window || 1;
+  const workPct = (100 * cov.recordedWork) / w;
+  const waitPct = (100 * cov.explicitWait) / w;
+  const missPct = (100 * cov.unobserved) / w;
+  el.innerHTML = `
+    <div class="actor-head">
+      <div class="actor-title">SM ${sm}<em>coverage decomposition</em></div>
+      <div class="actor-meta">union math · not a stall timeline</div>
+    </div>
+    <div class="role" style="margin-top:10px">
+      <div class="role-name">window</div>
+      <div class="track" style="display:flex;height:28px;background:transparent;overflow:hidden">
+        <span style="width:${workPct}%;background:var(--work)" title="recorded work"></span>
+        <span style="width:${waitPct}%;background:var(--wait-fill)" title="explicit wait"></span>
+        <span style="width:${missPct}%;background:var(--miss);border-left:1px solid var(--line)" title="unobserved"></span>
+      </div>
+    </div>
+    <p class="empty" style="margin-top:10px">
+      Recorded ${cov.recordedWork} · wait ${cov.explicitWait} · unobserved ${cov.unobserved}
+      of ${cov.window} ticks. Click another SM in the rail to compare.
+    </p>`;
 }
 
 function renderActor(sm, kind, norm, taskById, coverage) {
@@ -451,10 +598,41 @@ function drawBeam() {
 function renderInspector() {
   const box = document.getElementById('inspector');
   const clock = validateClock(state.trace);
+  if (state.mode === 'gaps') {
+    const norm = normalizeTrace(state.trace);
+    const coverage = smCoverage({ ...state.trace, spans: norm.spans, waits: norm.waits });
+    const sm = state.gapSm;
+    const cov = sm == null ? null : coverage.bySm[sm];
+    const pctU = cov && cov.window ? ((100 * cov.unobserved) / cov.window).toFixed(0) : '—';
+    box.innerHTML = `
+      <div>
+        <h2>Measured</h2>
+        <p class="fact"><span class="tag measured">Measured</span>
+          SM ${sm ?? '—'} unobserved <strong>${cov ? cov.unobserved : '—'} / ${cov ? cov.window : '—'} ticks (${pctU}%)</strong></p>
+        <p class="fact">Recorded work union ${cov ? cov.recordedWork : '—'} · explicit wait union ${cov ? cov.explicitWait : '—'}.</p>
+      </div>
+      <div>
+        <h2>Interpretation</h2>
+        <p class="fact"><span class="tag">Not a diagnosis</span>
+          Unobserved intervals mean this capture has no span or wait covering them.
+          They are <strong>not</strong> proven idle, stall, or cache miss.</p>
+        <p class="fact"><span class="tag inferred">Inferred</span>
+          Useful next step: instrument the quiet roles on this SM, or widen the capture — then re-measure.
+          Do not compare against the SM 3 counter wait as if this were the same class of finding.</p>
+      </div>
+      <div class="next">
+        <h2>Next</h2>
+        <button type="button" id="actFocus"><strong>Return to SM 3 wait</strong><span>Resume the dependency investigation (measured stall).</span></button>
+        <button type="button" id="actOverview"><strong>Return to overview</strong><span>Full window + silhouette rail.</span></button>
+      </div>`;
+    document.getElementById('actFocus')?.addEventListener('click', () => setMode('focus'));
+    document.getElementById('actOverview')?.addEventListener('click', () => setMode('overview'));
+    return;
+  }
   if (!state.selected) {
     box.innerHTML = `
       <div><h2>Scope</h2><p class="empty">Overview: silhouette rail + producer/consumer pair. Select the wait on SM 3 to begin.</p></div>
-      <div><h2>Coverage note</h2><p class="empty">Miss = unobserved in this capture window, not proven SM idle. Waits are explicit instrumentation.</p></div>
+      <div><h2>Coverage note</h2><p class="empty">Miss = unobserved in this capture window, not proven SM idle. Waits are explicit instrumentation. Use Coverage gaps to inspect miss without treating it as a stall.</p></div>
       <div><h2>Clock</h2><p class="fact">${clock.ok ? 'cross-SM timebase OK (globaltimer)' : clock.message}</p></div>`;
     return;
   }
@@ -508,14 +686,19 @@ function render() {
   const coverage = smCoverage({ ...state.trace, spans: norm.spans, waits: norm.waits });
   state.window = coverage.window;
   const taskById = Object.fromEntries(state.trace.tasks.map((t) => [t.id, t]));
+  document.body.classList.toggle('mode-gaps', state.mode === 'gaps');
+  document.querySelector('.rail-label').textContent =
+    state.mode === 'gaps' ? 'All SMs · coverage comparison' : 'Other SMs · activity silhouette';
   renderAxis();
-  renderSilhouettes(norm, taskById);
+  renderSilhouettes(norm, taskById, coverage);
+  const pair = document.getElementById('pair');
+  pair.classList.toggle('gaps-mode', state.mode === 'gaps');
   document.getElementById('actorProducer').innerHTML = renderActor(0, 'producer', norm, taskById, coverage);
   document.getElementById('actorConsumer').innerHTML = renderActor(3, 'consumer', norm, taskById, coverage);
+  renderGapsStrip(coverage);
   bindBands();
   renderInspector();
   requestAnimationFrame(drawBeam);
-  const ex = state.selected ? explainSelection(state.trace, state.selected) : null;
   if (state.mode === 'focus') {
     document.getElementById('headline').textContent = 'Why SM 3 waited on SM 0';
     document.getElementById('lede').textContent = 'Measured counter wait (280 ticks). Causal beam links producer GEMM instance 1 on SM 0 to the consumer MMA on SM 3.';
@@ -525,6 +708,9 @@ function render() {
   } else if (state.mode === 'source') {
     document.getElementById('headline').textContent = 'Source linked to the wait';
     document.getElementById('lede').textContent = 'Compiler/source refs from the evidence document — incomplete maps stay explicit.';
+  } else if (state.mode === 'gaps') {
+    document.getElementById('headline').textContent = 'Coverage gaps · missing evidence';
+    document.getElementById('lede').textContent = 'Unobserved ticks are capture holes. They must never be read as idle, stall, or a peer finding to the SM 3 wait.';
   } else {
     document.getElementById('headline').textContent = 'Megakernel execution · pair stage';
     document.getElementById('lede').textContent = 'Producer and consumer SMs own the stage. Other SMs remain silhouettes until you need them.';
@@ -537,9 +723,11 @@ async function main() {
   document.getElementById('btnFocus').addEventListener('click', () => setMode('focus'));
   document.getElementById('btnProducer').addEventListener('click', () => setMode('producer'));
   document.getElementById('btnSource').addEventListener('click', () => setMode('source'));
+  document.getElementById('btnGaps').addEventListener('click', () => setMode('gaps'));
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') setMode('overview');
     if (e.key === 'Enter' && state.mode === 'focus') setMode('producer');
+    if (e.key === 'g' && !e.metaKey && !e.ctrlKey) setMode('gaps');
   });
   window.addEventListener('resize', () => requestAnimationFrame(drawBeam));
   setMode('focus');
