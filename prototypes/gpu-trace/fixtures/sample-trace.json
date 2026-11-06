@@ -1,0 +1,144 @@
+{
+  "schemaVersion": "0.2.0",
+  "timeUnit": "device_ticks",
+  "run": {
+    "id": "fixture-run-1",
+    "kernelName": "vrx_megakernel",
+    "startedAtHost": "2026-11-06T04:00:00Z",
+    "buildId": "fixture-build-deadbeef",
+    "variantId": "baseline-producer-slow",
+    "grid": { "ctas": 16, "threadsPerCta": 384 },
+    "notes": "Synthetic fixture for the SM 3 dependency-wait investigation.",
+    "fixtureNarration": "Illustrative values only — not real profiling. SM 3 MMA stalls on a counter released by a slow GEMM producer on SM 0 (task instance 1). SM 7 drains early. Role spans on SM 0 overlap on purpose to stress union coverage."
+  },
+  "device": {
+    "name": "Fixture GPU (sm_90 stand-in)",
+    "smCount": 8,
+    "computeCapability": "9.0",
+    "architecture": "hopper",
+    "clockSource": "globaltimer",
+    "crossSmTimebase": "globaltimer",
+    "ticksPerNs": 1
+  },
+  "toolchain": {
+    "cudaVersion": "12.4",
+    "nvcc": "fixture",
+    "ptxas": "fixture",
+    "driverVersion": "fixture"
+  },
+  "instrumentation": {
+    "overheadEstimateTicks": 2,
+    "bufferCapacityRecords": 65536,
+    "recordsDropped": 0,
+    "writer": "dsh_gpu_trace_sketch_v0"
+  },
+  "tasks": [
+    { "id": 1, "kind": "gemm_tile", "label": "GEMM tile" },
+    { "id": 2, "kind": "dispatch", "label": "MoE dispatch" },
+    { "id": 3, "kind": "attn", "label": "Attn block" },
+    { "id": 4, "kind": "combine", "label": "Combine" }
+  ],
+  "artifacts": {
+    "sources": [
+      {
+        "id": "src-producer-wait",
+        "path": "kernels/vrx/controller.cuh",
+        "startLine": 142,
+        "endLine": 158,
+        "kind": "cuda",
+        "excerpt": "__device__ void vm_wait(...) {\\n  while (int32_t((v = ptx::ld_acquire_gpu(c)) - target) < 0)\\n    if (ptx::globaltimer() > deadline) vm_fault(...);\\n}"
+      },
+      {
+        "id": "src-producer-gemm",
+        "path": "kernels/vrx/roles.cuh",
+        "startLine": 88,
+        "endLine": 110,
+        "kind": "cuda",
+        "excerpt": "// MMA role issues second GEMM tile for instance 1 (intentionally long in this fixture)."
+      },
+      {
+        "id": "src-ptxas",
+        "path": "build/vrx_megakernel.ptxas.txt",
+        "kind": "ptxas",
+        "excerpt": "ptxas info: Used 128 registers, 48 bytes smem (fixture)"
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "id": "dep-sm3-on-sm0-inst1",
+      "kind": "counter",
+      "label": "SM3 MMA waits for GEMM instance 1 completion signal from SM0",
+      "consumerWaitId": "wait-sm3-mma",
+      "producerSpanId": "span-sm0-mma-i1",
+      "sourceRefIds": ["src-producer-wait", "src-producer-gemm"]
+    }
+  ],
+  "spans": [
+    { "id": "span-sm0-ld-i0", "sm": 0, "role": "loader", "taskId": 1, "instanceId": 0, "start": 10000, "end": 10120 },
+    { "id": "span-sm0-mma-i0", "sm": 0, "role": "mma", "taskId": 1, "instanceId": 0, "start": 10040, "end": 10160 },
+    { "id": "span-sm0-st-i0", "sm": 0, "role": "storer", "taskId": 1, "instanceId": 0, "start": 10150, "end": 10190 },
+    { "id": "span-sm0-ld-i1", "sm": 0, "role": "loader", "taskId": 1, "instanceId": 1, "start": 10190, "end": 10400, "sourceRefIds": ["src-producer-gemm"] },
+    { "id": "span-sm0-mma-i1", "sm": 0, "role": "mma", "taskId": 1, "instanceId": 1, "start": 10280, "end": 10450, "sourceRefIds": ["src-producer-gemm", "src-ptxas"] },
+
+    { "id": "span-sm1-ld-i2", "sm": 1, "role": "loader", "taskId": 1, "instanceId": 2, "start": 10000, "end": 10100 },
+    { "id": "span-sm1-mma-i2", "sm": 1, "role": "mma", "taskId": 1, "instanceId": 2, "start": 10030, "end": 10140 },
+    { "id": "span-sm1-st-i2", "sm": 1, "role": "storer", "taskId": 1, "instanceId": 2, "start": 10130, "end": 10170 },
+    { "id": "span-sm1-ld-i3", "sm": 1, "role": "loader", "taskId": 3, "instanceId": 3, "start": 10170, "end": 10260 },
+    { "id": "span-sm1-mma-i3", "sm": 1, "role": "mma", "taskId": 3, "instanceId": 3, "start": 10200, "end": 10310 },
+
+    { "id": "span-sm2-ld-i4", "sm": 2, "role": "loader", "taskId": 2, "instanceId": 4, "start": 10000, "end": 10090 },
+    { "id": "span-sm2-mma-i4", "sm": 2, "role": "mma", "taskId": 2, "instanceId": 4, "start": 10050, "end": 10150 },
+    { "id": "span-sm2-st-i4", "sm": 2, "role": "storer", "taskId": 2, "instanceId": 4, "start": 10140, "end": 10180 },
+    { "id": "span-sm2-ld-i5", "sm": 2, "role": "loader", "taskId": 4, "instanceId": 5, "start": 10180, "end": 10250 },
+    { "id": "span-sm2-mma-i5", "sm": 2, "role": "mma", "taskId": 4, "instanceId": 5, "start": 10210, "end": 10290 },
+
+    { "id": "span-sm3-ld-i6", "sm": 3, "role": "loader", "taskId": 1, "instanceId": 6, "start": 10000, "end": 10080 },
+    { "id": "span-sm3-mma-i6", "sm": 3, "role": "mma", "taskId": 1, "instanceId": 6, "start": 10040, "end": 10120 },
+    { "id": "span-sm3-ld-i7", "sm": 3, "role": "loader", "taskId": 1, "instanceId": 7, "start": 10400, "end": 10480 },
+    { "id": "span-sm3-mma-i7", "sm": 3, "role": "mma", "taskId": 1, "instanceId": 7, "start": 10420, "end": 10520 },
+
+    { "id": "span-sm4-ld-i8", "sm": 4, "role": "loader", "taskId": 3, "instanceId": 8, "start": 10010, "end": 10110 },
+    { "id": "span-sm4-mma-i8", "sm": 4, "role": "mma", "taskId": 3, "instanceId": 8, "start": 10040, "end": 10160 },
+    { "id": "span-sm4-st-i8", "sm": 4, "role": "storer", "taskId": 3, "instanceId": 8, "start": 10150, "end": 10200 },
+    { "id": "span-sm4-ld-i9", "sm": 4, "role": "loader", "taskId": 1, "instanceId": 9, "start": 10200, "end": 10300 },
+    { "id": "span-sm4-mma-i9", "sm": 4, "role": "mma", "taskId": 1, "instanceId": 9, "start": 10240, "end": 10340 },
+
+    { "id": "span-sm5-ld-i10", "sm": 5, "role": "loader", "taskId": 2, "instanceId": 10, "start": 10000, "end": 10095 },
+    { "id": "span-sm5-mma-i10", "sm": 5, "role": "mma", "taskId": 2, "instanceId": 10, "start": 10035, "end": 10145 },
+    { "id": "span-sm5-st-i10", "sm": 5, "role": "storer", "taskId": 2, "instanceId": 10, "start": 10135, "end": 10175 },
+    { "id": "span-sm5-ld-i11", "sm": 5, "role": "loader", "taskId": 4, "instanceId": 11, "start": 10175, "end": 10255 },
+    { "id": "span-sm5-mma-i11", "sm": 5, "role": "mma", "taskId": 4, "instanceId": 11, "start": 10205, "end": 10285 },
+
+    { "id": "span-sm6-ld-i12", "sm": 6, "role": "loader", "taskId": 1, "instanceId": 12, "start": 10005, "end": 10105 },
+    { "id": "span-sm6-mma-i12", "sm": 6, "role": "mma", "taskId": 1, "instanceId": 12, "start": 10035, "end": 10145 },
+    { "id": "span-sm6-st-i12", "sm": 6, "role": "storer", "taskId": 1, "instanceId": 12, "start": 10135, "end": 10180 },
+    { "id": "span-sm6-ld-i13", "sm": 6, "role": "loader", "taskId": 3, "instanceId": 13, "start": 10180, "end": 10270 },
+    { "id": "span-sm6-mma-i13", "sm": 6, "role": "mma", "taskId": 3, "instanceId": 13, "start": 10210, "end": 10320 },
+
+    { "id": "span-sm7-ld-i14", "sm": 7, "role": "loader", "taskId": 2, "instanceId": 14, "start": 10000, "end": 10100 },
+    { "id": "span-sm7-mma-i14", "sm": 7, "role": "mma", "taskId": 2, "instanceId": 14, "start": 10040, "end": 10150 },
+    { "id": "span-sm7-st-i14", "sm": 7, "role": "storer", "taskId": 2, "instanceId": 14, "start": 10140, "end": 10185 }
+  ],
+  "waits": [
+    {
+      "id": "wait-sm3-mma",
+      "sm": 3,
+      "role": "mma",
+      "start": 10120,
+      "end": 10400,
+      "kind": "counter",
+      "target": "task:1/inst:1 signal",
+      "sourceRefIds": ["src-producer-wait"]
+    },
+    {
+      "id": "wait-sm7-drain",
+      "sm": 7,
+      "role": "loader",
+      "start": 10185,
+      "end": 10450,
+      "kind": "counter",
+      "target": "scheduler drained — no further work issued"
+    }
+  ]
+}

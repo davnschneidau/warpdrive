@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"/><title>Direction B · Dependency stage</title>
+<style>
+body{margin:0;font:14px/1.4 "IBM Plex Sans",sans-serif;background:#f3f1ec;color:#141414;padding:24px}
+h1{font:600 28px/1.1 Newsreader,serif;max-width:22ch}
+.stage{position:relative;margin-top:20px;border:1px solid rgba(0,0,0,.12);padding:24px;background:#faf9f6;min-height:360px}
+.prod,.cons{position:relative;z-index:1}
+.label{font:12px ui-monospace;color:#0f6b5c;margin-bottom:8px}
+.cons .label{color:#b42318}
+.track{height:26px;background:#ddd9d1;margin:4px 0;position:relative}
+.bar{position:absolute;top:3px;bottom:3px;background:#2a2a2a}
+.wait{background:repeating-linear-gradient(-45deg,#b42318,#b42318 2px,#c75a52 2px,#c75a52 5px)}
+svg{position:absolute;inset:0;pointer-events:none}
+p{color:#3a3a3a;max-width:60ch}
+</style></head><body>
+<p>Direction B — Spatial dependency investigation (structural sketch)</p>
+<h1>Producer above · consumer below · causal beam</h1>
+<p>Chosen as the primary stage language for the shipped instrument.</p>
+<div class="stage">
+  <svg viewBox="0 0 800 360" width="100%" height="360"><path d="M 520 90 C 520 180, 360 180, 360 250" fill="none" stroke="#0f6b5c" stroke-width="2.5"/><circle cx="520" cy="90" r="4" fill="#0f6b5c"/><circle cx="360" cy="250" r="4" fill="#b42318"/></svg>
+  <div class="prod"><div class="label">SM 0 PRODUCER</div><div class="track"><div class="bar" style="left:55%;width:30%"></div></div></div>
+  <div style="height:80px"></div>
+  <div class="cons"><div class="label">SM 3 CONSUMER</div><div class="track"><div class="bar wait" style="left:25%;width:40%"></div></div></div>
+</div>
+</body></html>

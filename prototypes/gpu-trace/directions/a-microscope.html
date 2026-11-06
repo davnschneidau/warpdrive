@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"/><title>Direction A · Microscope</title>
+<style>
+body{margin:0;font:14px/1.4 "IBM Plex Sans",sans-serif;background:#f3f1ec;color:#141414;padding:24px}
+h1{font:600 28px/1.1 Newsreader,serif;max-width:20ch}
+.lens{margin-top:20px;border:1px solid rgba(0,0,0,.12);padding:20px;background:#faf9f6;min-height:320px}
+.sm{margin:16px 0}.label{font:12px ui-monospace;margin-bottom:6px}
+.track{height:28px;background:#ddd9d1;position:relative}
+.bar{position:absolute;top:3px;bottom:3px;background:#2a2a2a}
+.wait{background:repeating-linear-gradient(-45deg,#b42318,#b42318 2px,#c75a52 2px,#c75a52 5px)}
+.rail{height:16px;opacity:.4;margin-top:24px;background:#ddd9d1}
+p{color:#3a3a3a;max-width:60ch}
+</style></head><body>
+<p>Direction A — Execution microscope (structural sketch)</p>
+<h1>Lens on SM 0 × SM 3 only</h1>
+<p>Other SMs collapse to a silhouette. Time window defaults to the wait. Dependency still needs an explicit beam (supplied in the synthesis).</p>
+<div class="lens">
+  <div class="sm"><div class="label">SM 0 · roles</div><div class="track"><div class="bar" style="left:10%;width:40%"></div><div class="bar" style="left:35%;width:45%"></div></div></div>
+  <div class="sm"><div class="label">SM 3 · wait</div><div class="track"><div class="bar wait" style="left:20%;width:55%"></div></div></div>
+  <div class="rail"></div>
+</div>
+</body></html>
