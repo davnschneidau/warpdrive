@@ -129,6 +129,7 @@
     { "path": "./packages/client/ui-subagent" },
     { "path": "./packages/client/ui-agent-team" },
     { "path": "./packages/experimental/client-ui-stats" },
+    { "path": "./packages/experimental/client-ui-gpu-investigation" },
     { "path": "./packages/client/ui-dockkit" },
     { "path": "./packages/client/ui-sidebar-right" },
     { "path": "./packages/client/ui-entry-customization" },

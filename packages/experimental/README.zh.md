@@ -70,6 +70,10 @@ kind: "package-group"
 | [`liveshare-protocol`](liveshare-protocol/README.zh.md) | owner bundle 与 Relay 共用的线路帧与身份契约 | 库与协议，不使用 ctx key |
 | [`voice-input-bundle`](voice-input-bundle/README.zh.md) | 默认禁用的可选语音输入组合 | — |
 | [`client-ui-stats`](client-ui-stats/README.zh.md) | Web 端按轮次与步骤展示上下文、耗时、缓存与工具成本 | — |
+| [`gpu-evidence`](gpu-evidence/README.zh.md) | 版本化 GPU 剖析证据、内存视图模型、对比与时间线归约 | — |
+| [`tool-gpu-evidence`](tool-gpu-evidence/README.zh.md) | 内存总览、路径检查与运行对比的模型工具 | — |
+| [`client-ui-gpu-investigation`](client-ui-gpu-investigation/README.zh.md) | 右侧停靠 GPU 内存负载调查 | — |
+| [`gpu-investigation-bundle`](gpu-investigation-bundle/README.zh.md) | 上述能力的可选官方组合 | — |
 | [`auto-review`](auto-review/README.zh.md) | 显式 Web 层，在每个原生或 PTC inner 工具调用前使用同一模型审查 | — |
 | [`subagent-oar`](subagent-oar/README.zh.md) | 通过 OAR 执行外部编程智能体的独立任务 | `ctx.subagents` |
 | [`tool-subagent-oar`](tool-subagent-oar/README.zh.md) | 为每项委派任务选择配置的外部代理 | `ctx.tools` |

@@ -1,0 +1,741 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Causal workbench · SM 3 wait</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --ink: #141414;
+      --ink-2: #3a3a3a;
+      --ink-3: #6e6e6e;
+      --paper: #f3f1ec;
+      --panel: #faf9f6;
+      --line: rgba(20,20,20,.12);
+      --work: #2a2a2a;
+      --work-soft: #5c5c5c;
+      --wait: #b42318;
+      --wait-fill: repeating-linear-gradient(-48deg, #b42318, #b42318 2px, #c75a52 2px, #c75a52 5px);
+      --beam: #0f6b5c;
+      --beam-soft: rgba(15,107,92,.22);
+      --miss: #ddd9d1;
+      --focus-ring: #141414;
+      --font: "IBM Plex Sans", sans-serif;
+      --mono: "IBM Plex Mono", ui-monospace, monospace;
+      --display: "Newsreader", Georgia, serif;
+      --stage-pad: 28px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --ink: #f2f0ea; --ink-2: #c8c4ba; --ink-3: #8a8680;
+        --paper: #161513; --panel: #1c1b18; --line: rgba(242,240,234,.12);
+        --work: #e8e4da; --work-soft: #a8a398; --miss: #2a2926;
+        --beam-soft: rgba(62,168,148,.25); --focus-ring: #f2f0ea;
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0; font-family: var(--font); background: var(--paper); color: var(--ink);
+      font-size: 13px; line-height: 1.4;
+    }
+    button { font: inherit; color: inherit; }
+    .shell {
+      min-height: 100%; display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+    }
+    .top {
+      padding: 18px var(--stage-pad) 12px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+    }
+    .eyebrow {
+      display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+      font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
+      color: var(--ink-3); margin-bottom: 8px;
+    }
+    .badge {
+      border: 1px solid var(--line); padding: 2px 8px; border-radius: 2px;
+      letter-spacing: .04em;
+    }
+    .badge.syn { border-color: color-mix(in srgb, var(--wait) 45%, var(--line)); color: var(--wait); }
+    h1 {
+      margin: 0; font-family: var(--display); font-weight: 600;
+      font-size: clamp(22px, 2.4vw, 30px); letter-spacing: -0.02em;
+      max-width: 28ch; line-height: 1.15;
+    }
+    .lede {
+      margin: 8px 0 0; color: var(--ink-2); max-width: 62ch; font-size: 14px;
+    }
+    .controls {
+      display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px;
+    }
+    .controls button {
+      border: 1px solid var(--line); background: transparent;
+      padding: 7px 12px; border-radius: 2px; cursor: pointer;
+    }
+    .controls button[aria-pressed="true"],
+    .controls button.primary {
+      background: var(--ink); color: var(--paper); border-color: var(--ink);
+    }
+    @media (prefers-color-scheme: dark) {
+      .controls button[aria-pressed="true"],
+      .controls button.primary { color: var(--paper); }
+    }
+    .controls button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+    .stage {
+      position: relative; padding: 16px var(--stage-pad) 8px;
+      overflow: auto; min-height: 0;
+    }
+    .rail-label {
+      font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+      color: var(--ink-3); margin: 0 0 6px;
+    }
+    .silhouette {
+      display: grid; grid-template-columns: 72px 1fr; gap: 12px; align-items: center;
+      margin-bottom: 18px; min-height: 28px;
+    }
+    .silhouette .track {
+      height: 18px; background: var(--miss); position: relative; border-radius: 1px;
+    }
+    .silhouette .tick {
+      position: absolute; top: 2px; bottom: 2px; background: var(--work-soft); opacity: .35; border-radius: 1px;
+    }
+    .silhouette.dim { opacity: .45; }
+    .silhouette.gap-focus {
+      opacity: 1;
+      outline: 1px solid color-mix(in srgb, var(--wait) 35%, var(--line));
+      outline-offset: 4px;
+      padding: 4px 6px;
+      margin-left: -6px;
+      margin-right: -6px;
+    }
+    .silhouette .track .gap-fill {
+      position: absolute; inset: 0; background:
+        repeating-linear-gradient(90deg, transparent, transparent 6px, rgba(20,20,20,.06) 6px, rgba(20,20,20,.06) 7px);
+      pointer-events: none;
+    }
+    .gap-banner {
+      border: 1px solid color-mix(in srgb, var(--wait) 40%, var(--line));
+      background: color-mix(in srgb, var(--wait) 8%, var(--panel));
+      padding: 12px 14px; margin: 0 0 16px; border-radius: 2px;
+      max-width: 72ch;
+    }
+    .gap-banner strong { font-weight: 600; }
+    .gap-banner p { margin: 4px 0 0; color: var(--ink-2); }
+    .pair.gaps-mode { display: none; }
+    .gaps-strip {
+      display: none;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      padding: 14px 16px;
+      border-radius: 2px;
+      margin-top: 8px;
+    }
+    body.mode-gaps .gaps-strip { display: block; }
+    body.mode-gaps .silhouette {
+      grid-template-columns: 88px 1fr 120px;
+      min-height: 36px;
+      margin-bottom: 10px;
+    }
+    body.mode-gaps .silhouette .track { height: 26px; }
+    .silhouette .miss-meta {
+      font-family: var(--mono); font-size: 11px; color: var(--ink-3);
+      text-align: right; font-variant-numeric: tabular-nums;
+    }
+    .silhouette.gap-focus .miss-meta { color: var(--ink); font-weight: 500; }
+
+    .pair {
+      position: relative; display: grid; gap: 0;
+      border: 1px solid var(--line); background: var(--panel);
+      padding: 14px 14px 18px; border-radius: 2px;
+    }
+    .actor {
+      position: relative; z-index: 1;
+      padding: 10px 4px 14px;
+    }
+    .actor.producer { border-bottom: 1px dashed var(--line); margin-bottom: 28px; padding-bottom: 22px; }
+    .actor-head {
+      display: flex; justify-content: space-between; align-items: baseline;
+      gap: 12px; margin-bottom: 10px;
+    }
+    .actor-title {
+      font-family: var(--mono); font-size: 12px; font-weight: 500;
+      letter-spacing: .02em;
+    }
+    .actor-title em { font-style: normal; color: var(--ink-3); font-weight: 400; margin-left: 8px; }
+    .actor.producer .actor-title { color: var(--beam); }
+    .actor.consumer .actor-title { color: var(--wait); }
+    .actor-meta { font-family: var(--mono); font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+
+    .roles { display: grid; gap: 5px; }
+    .role {
+      display: grid; grid-template-columns: 64px 1fr; gap: 10px; align-items: center;
+    }
+    .role-name {
+      font-family: var(--mono); font-size: 11px; color: var(--ink-3); text-align: right;
+    }
+    .track {
+      position: relative; height: 22px; background: var(--miss); border-radius: 1px;
+    }
+    .band {
+      position: absolute; top: 2px; bottom: 2px; border: 0; padding: 0 6px;
+      font-family: var(--mono); font-size: 10px; color: #f7f5f0;
+      display: flex; align-items: center; overflow: hidden; white-space: nowrap;
+      cursor: pointer; border-radius: 1px; background: var(--work);
+    }
+    .band.wait { background: var(--wait-fill); color: #fff; }
+    .band.soft { background: var(--work-soft); }
+    .band.selected { box-shadow: 0 0 0 2px var(--focus-ring); z-index: 3; }
+    .band.producer-mark { box-shadow: 0 0 0 2px var(--beam); z-index: 3; }
+    .band.dimmed { opacity: .28; }
+    .band.wait.dimmed { opacity: .42; } /* keep consumer wait readable while following producer */
+    .band:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+
+    .axis {
+      display: grid; grid-template-columns: 72px 1fr; gap: 12px;
+      margin: 8px 0 14px; font-family: var(--mono); font-size: 11px; color: var(--ink-3);
+    }
+    .axis-bar {
+      position: relative; height: 14px; border-bottom: 1px solid var(--line);
+    }
+    .axis-bar span {
+      position: absolute; top: 0; transform: translateX(-50%);
+    }
+    .axis-bar span:first-child { transform: none; }
+    .axis-bar span:last-child { transform: translateX(-100%); }
+
+    .beam-layer {
+      position: absolute; inset: 0; pointer-events: none; z-index: 2;
+      overflow: visible;
+    }
+    .beam-layer path {
+      fill: none; stroke: var(--beam); stroke-width: 2.25;
+      stroke-dasharray: 0; opacity: .95;
+    }
+    .beam-layer.hidden { display: none; }
+    .beam-label {
+      position: absolute; font-family: var(--mono); font-size: 11px;
+      color: var(--beam); background: color-mix(in srgb, var(--panel) 88%, transparent);
+      padding: 2px 6px; border: 1px solid var(--beam-soft); border-radius: 2px;
+      white-space: nowrap; pointer-events: none;
+    }
+
+    .inspector {
+      border-top: 1px solid var(--line); background: var(--panel);
+      padding: 14px var(--stage-pad) 20px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr);
+      gap: 18px;
+    }
+    .inspector h2 {
+      margin: 0 0 8px; font-size: 11px; letter-spacing: .06em;
+      text-transform: uppercase; color: var(--ink-3); font-weight: 500;
+    }
+    .fact {
+      font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums;
+      margin: 0 0 6px;
+    }
+    .fact strong { font-weight: 500; color: var(--ink); }
+    .tag {
+      display: inline-block; font-size: 10px; letter-spacing: .04em; text-transform: uppercase;
+      border: 1px solid var(--line); padding: 1px 6px; margin-right: 6px; border-radius: 2px;
+      color: var(--ink-3);
+    }
+    .tag.measured { color: var(--ink); border-color: var(--ink); }
+    .tag.inferred { color: var(--ink-3); }
+    .tag.source { color: var(--beam); border-color: color-mix(in srgb, var(--beam) 40%, var(--line)); }
+    .code {
+      margin: 8px 0 0; padding: 10px; background: color-mix(in srgb, var(--miss) 65%, var(--panel));
+      border: 1px solid var(--line); border-radius: 2px;
+      font-family: var(--mono); font-size: 11px; white-space: pre-wrap; color: var(--ink-2);
+      max-height: 140px; overflow: auto;
+    }
+    .next {
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .next button {
+      text-align: left; border: 1px solid var(--line); background: transparent;
+      padding: 10px 12px; border-radius: 2px; cursor: pointer;
+    }
+    .next button strong { display: block; font-weight: 500; margin-bottom: 2px; }
+    .next button span { color: var(--ink-3); font-size: 12px; }
+    .next button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+    .empty { color: var(--ink-3); margin: 0; }
+
+    .legend {
+      display: flex; flex-wrap: wrap; gap: 14px; margin: 0 0 12px;
+      font-size: 11px; color: var(--ink-3);
+    }
+    .lg { width: 14px; height: 8px; display: inline-block; margin-right: 5px; vertical-align: 0; border-radius: 1px; }
+    .lg.work { background: var(--work); }
+    .lg.wait { background: var(--wait-fill); }
+    .lg.miss { background: var(--miss); border: 1px solid var(--line); }
+    .lg.beam { background: var(--beam); }
+
+    @media (max-width: 1100px) {
+      .inspector { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="top">
+      <div class="eyebrow">
+        <span class="badge syn">Synthetic fixture</span>
+        <span>Megakernel task timeline · %globaltimer</span>
+        <span id="windowLabel"></span>
+      </div>
+      <h1 id="headline">Why SM 3 waited on SM 0</h1>
+      <p class="lede" id="lede">
+        Measured wait on a counter. The producer is GEMM instance 1 on SM 0.
+        Unrelated SMs stay in the silhouette rail — not peer findings.
+      </p>
+      <div class="controls" role="toolbar" aria-label="Investigation scope">
+        <button type="button" id="btnOverview">Overview</button>
+        <button type="button" class="primary" id="btnFocus" aria-pressed="true">Focus wait</button>
+        <button type="button" id="btnProducer">Follow producer</button>
+        <button type="button" id="btnSource">Open source</button>
+        <button type="button" id="btnGaps">Coverage gaps</button>
+      </div>
+    </header>
+
+    <main class="stage" id="stage">
+      <div class="legend">
+        <span><i class="lg work"></i>recorded work</span>
+        <span><i class="lg wait"></i>explicit wait</span>
+        <span><i class="lg miss"></i>unobserved in capture</span>
+        <span><i class="lg beam"></i>proven dependency</span>
+      </div>
+      <div class="axis"><div></div><div class="axis-bar" id="axis"></div></div>
+      <p class="rail-label">Other SMs · activity silhouette</p>
+      <div id="silhouettes"></div>
+      <div class="pair" id="pair">
+        <svg class="beam-layer" id="beam" aria-hidden="true"></svg>
+        <div class="beam-label" id="beamLabel" hidden></div>
+        <section class="actor producer" id="actorProducer"></section>
+        <section class="actor consumer" id="actorConsumer"></section>
+      </div>
+      <div class="gaps-strip" id="gapsStrip" aria-live="polite"></div>
+    </main>
+
+    <aside class="inspector" id="inspector" aria-live="polite"></aside>
+  </div>
+
+  <script type="module">
+import {
+  deriveFindings,
+  explainSelection,
+  normalizeTrace,
+  smCoverage,
+  validateClock,
+} from './src/reducers.mjs';
+
+const ROLE_ORDER = ['controller', 'loader', 'mma', 'math', 'storer', 'other'];
+const WAIT_ID = 'wait-sm3-mma';
+const PRODUCER_ID = 'span-sm0-mma-i1';
+
+const state = {
+  trace: null,
+  mode: 'focus', // overview | focus | producer | source | gaps
+  selected: { type: 'wait', id: WAIT_ID },
+  viewStart: 0,
+  viewEnd: 520,
+  gapSm: null,
+};
+
+function pct(t, a, b) {
+  const w = b - a;
+  return w <= 0 ? 0 : ((t - a) / w) * 100;
+}
+
+function bandStyle(start, end) {
+  const left = pct(start, state.viewStart, state.viewEnd);
+  const right = pct(end, state.viewStart, state.viewEnd);
+  return `left:${Math.max(0, left)}%;width:${Math.max(0.35, right - left)}%`;
+}
+
+function inView(start, end) {
+  return end > state.viewStart && start < state.viewEnd;
+}
+
+function setMode(mode) {
+  state.mode = mode;
+  if (mode === 'overview') {
+    state.viewStart = 0;
+    state.viewEnd = state.window;
+    state.selected = null;
+    state.gapSm = null;
+  } else if (mode === 'focus') {
+    state.selected = { type: 'wait', id: WAIT_ID };
+    state.viewStart = 80;
+    state.viewEnd = 480;
+    state.gapSm = null;
+  } else if (mode === 'producer') {
+    state.selected = { type: 'span', id: PRODUCER_ID };
+    state.viewStart = 160;
+    state.viewEnd = 480;
+    state.gapSm = null;
+  } else if (mode === 'source') {
+    state.selected = { type: 'wait', id: WAIT_ID };
+    state.viewStart = 80;
+    state.viewEnd = 480;
+    state.gapSm = null;
+  } else if (mode === 'gaps') {
+    state.selected = null;
+    state.viewStart = 0;
+    state.viewEnd = state.window || 520;
+    state.gapSm = pickGapSm();
+  }
+  document.getElementById('btnOverview').setAttribute('aria-pressed', String(mode === 'overview'));
+  document.getElementById('btnFocus').setAttribute('aria-pressed', String(mode === 'focus'));
+  document.getElementById('btnProducer').setAttribute('aria-pressed', String(mode === 'producer'));
+  document.getElementById('btnSource').setAttribute('aria-pressed', String(mode === 'source'));
+  document.getElementById('btnGaps').setAttribute('aria-pressed', String(mode === 'gaps'));
+  render();
+}
+
+function pickGapSm() {
+  if (!state.trace) return null;
+  const norm = normalizeTrace(state.trace);
+  const coverage = smCoverage({ ...state.trace, spans: norm.spans, waits: norm.waits });
+  let best = null;
+  let bestPct = -1;
+  for (const [smStr, cov] of Object.entries(coverage.bySm)) {
+    const sm = Number(smStr);
+    if (cov.window <= 0) continue;
+    const pctU = cov.unobserved / cov.window;
+    if (pctU > bestPct) {
+      bestPct = pctU;
+      best = sm;
+    }
+  }
+  return best;
+}
+
+function renderAxis() {
+  const axis = document.getElementById('axis');
+  const ticks = [state.viewStart, (state.viewStart + state.viewEnd) / 2, state.viewEnd];
+  axis.innerHTML = ticks.map((t, i) => {
+    const x = i === 0 ? 0 : i === 2 ? 100 : 50;
+    return `<span style="left:${x}%">${Math.round(t)}</span>`;
+  }).join('');
+  document.getElementById('windowLabel').textContent =
+    `window ${Math.round(state.viewStart)}–${Math.round(state.viewEnd)} / ${state.window} ticks (origin-normalized)`;
+}
+
+function renderSilhouettes(norm, taskById, coverage) {
+  const root = document.getElementById('silhouettes');
+  const focusPair = new Set([0, 3]);
+  const html = [];
+  if (state.mode === 'gaps') {
+    const findings = deriveFindings({ ...state.trace, spans: norm.spans, waits: norm.waits })
+      .findings
+      .filter((f) => f.kind === 'coverage');
+    const focus = findings.find((f) => f.sm === state.gapSm) || findings[0];
+    html.push(`<div class="gap-banner" id="gapBanner">
+      <strong>Missing evidence — not a performance diagnosis</strong>
+      <p>${focus
+        ? focus.detail
+        : 'No SM exceeds the unobserved threshold in this capture window.'}</p>
+    </div>`);
+  }
+  for (let sm = 0; sm < state.trace.device.smCount; sm++) {
+    // Causal pair owns the stage except in gaps mode, where every SM is comparable.
+    if (focusPair.has(sm) && state.mode !== 'gaps') continue;
+    const spans = norm.spans.filter((s) => s.sm === sm && inView(s.start, s.end));
+    const waits = norm.waits.filter((w) => w.sm === sm && inView(w.start, w.end));
+    const cov = coverage.bySm[sm];
+    const gapFocus = state.mode === 'gaps' && sm === state.gapSm;
+    const dim = state.mode !== 'overview' && state.mode !== 'gaps'
+      ? 'dim'
+      : state.mode === 'gaps' && !gapFocus
+        ? 'dim'
+        : '';
+    const missPct = cov && cov.window ? Math.round((100 * cov.unobserved) / cov.window) : 0;
+    const missLabel = cov ? `${cov.unobserved} miss · ${missPct}%` : '';
+    html.push(`<div class="silhouette ${dim} ${gapFocus ? 'gap-focus' : ''}" data-sm="${sm}">
+      <div class="actor-title" style="color:var(--ink-3)">SM ${sm}${gapFocus ? ' · gap' : ''}</div>
+      <div class="track" title="${missLabel}">
+        <span class="gap-fill" aria-hidden="true"></span>
+        ${spans.map((s) => `<span class="tick" style="${bandStyle(s.start, s.end)}"></span>`).join('')}
+        ${waits.map((w) => `<span class="tick" style="${bandStyle(w.start, w.end)};background:var(--wait);opacity:.55"></span>`).join('')}
+      </div>
+      ${state.mode === 'gaps' ? `<div class="miss-meta">${missLabel}</div>` : ''}
+    </div>`);
+  }
+  root.innerHTML = html.join('');
+  if (state.mode === 'gaps') {
+    root.querySelectorAll('.silhouette[data-sm]').forEach((el) => {
+      el.style.cursor = 'pointer';
+      el.addEventListener('click', () => {
+        state.gapSm = Number(el.getAttribute('data-sm'));
+        render();
+      });
+    });
+  }
+}
+
+function renderGapsStrip(coverage) {
+  const el = document.getElementById('gapsStrip');
+  if (!el) return;
+  if (state.mode !== 'gaps' || state.gapSm == null) {
+    el.innerHTML = '';
+    return;
+  }
+  const sm = state.gapSm;
+  const cov = coverage.bySm[sm];
+  if (!cov) {
+    el.innerHTML = '';
+    return;
+  }
+  const w = cov.window || 1;
+  const workPct = (100 * cov.recordedWork) / w;
+  const waitPct = (100 * cov.explicitWait) / w;
+  const missPct = (100 * cov.unobserved) / w;
+  el.innerHTML = `
+    <div class="actor-head">
+      <div class="actor-title">SM ${sm}<em>coverage decomposition</em></div>
+      <div class="actor-meta">union math · not a stall timeline</div>
+    </div>
+    <div class="role" style="margin-top:10px">
+      <div class="role-name">window</div>
+      <div class="track" style="display:flex;height:28px;background:transparent;overflow:hidden">
+        <span style="width:${workPct}%;background:var(--work)" title="recorded work"></span>
+        <span style="width:${waitPct}%;background:var(--wait-fill)" title="explicit wait"></span>
+        <span style="width:${missPct}%;background:var(--miss);border-left:1px solid var(--line)" title="unobserved"></span>
+      </div>
+    </div>
+    <p class="empty" style="margin-top:10px">
+      Recorded ${cov.recordedWork} · wait ${cov.explicitWait} · unobserved ${cov.unobserved}
+      of ${cov.window} ticks. Click another SM in the rail to compare.
+    </p>`;
+}
+
+function renderActor(sm, kind, norm, taskById, coverage) {
+  const spans = norm.spans.filter((s) => s.sm === sm);
+  const waits = norm.waits.filter((w) => w.sm === sm);
+  const roles = [...new Set([
+    ...spans.map((s) => s.role || 'other'),
+    ...waits.map((w) => w.role || 'other'),
+  ])].sort((a, b) => ROLE_ORDER.indexOf(a) - ROLE_ORDER.indexOf(b));
+  const cov = coverage.bySm[sm];
+  const title = kind === 'producer'
+    ? `SM ${sm}<em>producer</em>`
+    : `SM ${sm}<em>consumer</em>`;
+  const rows = roles.map((role) => {
+    const rs = spans.filter((s) => (s.role || 'other') === role && inView(s.start, s.end));
+    const rw = waits.filter((w) => (w.role || 'other') === role && inView(w.start, w.end));
+    const bands = [
+      ...rs.map((s) => {
+        const selected = state.selected?.type === 'span' && state.selected.id === s.id;
+        const producer = s.id === PRODUCER_ID && (state.mode === 'focus' || state.mode === 'producer' || state.mode === 'source');
+        const dimmed = state.selected && !selected && !producer && state.mode !== 'overview';
+        return `<button type="button" class="band soft ${selected ? 'selected' : ''} ${producer ? 'producer-mark' : ''} ${dimmed ? 'dimmed' : ''}"
+          data-type="span" data-id="${s.id}" style="${bandStyle(s.start, s.end)}"
+          title="${taskById[s.taskId]?.label || ''}">${taskById[s.taskId]?.label || role}</button>`;
+      }),
+      ...rw.map((w) => {
+        const selected = state.selected?.type === 'wait' && state.selected.id === w.id;
+        const dimmed = state.selected && !selected && state.mode !== 'overview';
+        return `<button type="button" class="band wait ${selected ? 'selected' : ''} ${dimmed ? 'dimmed' : ''}"
+          data-type="wait" data-id="${w.id}" style="${bandStyle(w.start, w.end)}"
+          title="wait">wait ${w.end - w.start}</button>`;
+      }),
+    ].join('');
+    return `<div class="role"><div class="role-name">${role}</div><div class="track" data-sm="${sm}" data-role="${role}">${bands}</div></div>`;
+  }).join('');
+  return `<div class="actor-head">
+      <div class="actor-title">${title}</div>
+      <div class="actor-meta">work ${cov.recordedWork} · wait ${cov.explicitWait} · miss ${cov.unobserved}</div>
+    </div>
+    <div class="roles">${rows}</div>`;
+}
+
+function drawBeam() {
+  const svg = document.getElementById('beam');
+  const label = document.getElementById('beamLabel');
+  const show = state.mode === 'focus' || state.mode === 'source' ||
+    (state.selected?.type === 'wait' && state.selected.id === WAIT_ID) ||
+    (state.selected?.type === 'span' && state.selected.id === PRODUCER_ID);
+  if (!show || state.mode === 'overview') {
+    svg.classList.add('hidden');
+    label.hidden = true;
+    return;
+  }
+  svg.classList.remove('hidden');
+  const prod = document.querySelector(`[data-id="${PRODUCER_ID}"]`);
+  const wait = document.querySelector(`[data-id="${WAIT_ID}"]`);
+  const pair = document.getElementById('pair');
+  if (!prod || !wait) {
+    svg.classList.add('hidden');
+    label.hidden = true;
+    return;
+  }
+  const pr = pair.getBoundingClientRect();
+  const a = prod.getBoundingClientRect();
+  const b = wait.getBoundingClientRect();
+  const x1 = a.left + a.width * 0.82 - pr.left;
+  const y1 = a.bottom - pr.top;
+  const x2 = b.left + b.width * 0.35 - pr.left;
+  const y2 = b.top - pr.top;
+  const midY = (y1 + y2) / 2;
+  svg.setAttribute('width', String(pr.width));
+  svg.setAttribute('height', String(pr.height));
+  svg.innerHTML = `<path d="M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}" />
+    <circle cx="${x1}" cy="${y1}" r="3.5" fill="var(--beam)" />
+    <circle cx="${x2}" cy="${y2}" r="3.5" fill="var(--wait)" />`;
+  label.hidden = false;
+  label.textContent = 'counter · dep-sm3-on-sm0-inst1';
+  label.style.left = `${(x1 + x2) / 2 - 70}px`;
+  label.style.top = `${midY - 12}px`;
+}
+
+function renderInspector() {
+  const box = document.getElementById('inspector');
+  const clock = validateClock(state.trace);
+  if (state.mode === 'gaps') {
+    const norm = normalizeTrace(state.trace);
+    const coverage = smCoverage({ ...state.trace, spans: norm.spans, waits: norm.waits });
+    const sm = state.gapSm;
+    const cov = sm == null ? null : coverage.bySm[sm];
+    const pctU = cov && cov.window ? ((100 * cov.unobserved) / cov.window).toFixed(0) : '—';
+    box.innerHTML = `
+      <div>
+        <h2>Measured</h2>
+        <p class="fact"><span class="tag measured">Measured</span>
+          SM ${sm ?? '—'} unobserved <strong>${cov ? cov.unobserved : '—'} / ${cov ? cov.window : '—'} ticks (${pctU}%)</strong></p>
+        <p class="fact">Recorded work union ${cov ? cov.recordedWork : '—'} · explicit wait union ${cov ? cov.explicitWait : '—'}.</p>
+      </div>
+      <div>
+        <h2>Interpretation</h2>
+        <p class="fact"><span class="tag">Not a diagnosis</span>
+          Unobserved intervals mean this capture has no span or wait covering them.
+          They are <strong>not</strong> proven idle, stall, or cache miss.</p>
+        <p class="fact"><span class="tag inferred">Inferred</span>
+          Useful next step: instrument the quiet roles on this SM, or widen the capture — then re-measure.
+          Do not compare against the SM 3 counter wait as if this were the same class of finding.</p>
+      </div>
+      <div class="next">
+        <h2>Next</h2>
+        <button type="button" id="actFocus"><strong>Return to SM 3 wait</strong><span>Resume the dependency investigation (measured stall).</span></button>
+        <button type="button" id="actOverview"><strong>Return to overview</strong><span>Full window + silhouette rail.</span></button>
+      </div>`;
+    document.getElementById('actFocus')?.addEventListener('click', () => setMode('focus'));
+    document.getElementById('actOverview')?.addEventListener('click', () => setMode('overview'));
+    return;
+  }
+  if (!state.selected) {
+    box.innerHTML = `
+      <div><h2>Scope</h2><p class="empty">Overview: silhouette rail + producer/consumer pair. Select the wait on SM 3 to begin.</p></div>
+      <div><h2>Coverage note</h2><p class="empty">Miss = unobserved in this capture window, not proven SM idle. Waits are explicit instrumentation. Use Coverage gaps to inspect miss without treating it as a stall.</p></div>
+      <div><h2>Clock</h2><p class="fact">${clock.ok ? 'cross-SM timebase OK (globaltimer)' : clock.message}</p></div>`;
+    return;
+  }
+  const ex = explainSelection(state.trace, state.selected);
+  const wait = state.trace.waits.find((w) => w.id === WAIT_ID);
+  const sources = ex.sources || [];
+  const showSource = state.mode === 'source' || sources.length > 0;
+  box.innerHTML = `
+    <div>
+      <h2>Measured</h2>
+      <p class="fact"><span class="tag measured">Measured</span><strong>${ex.headline || ''}</strong></p>
+      <p class="fact">${ex.summary || ''}</p>
+      ${wait ? `<p class="fact">kind <strong>${wait.kind}</strong> · target <strong>${wait.target || '—'}</strong></p>` : ''}
+      ${ex.producer ? `<p class="fact">producer SM ${ex.producer.sm} / ${ex.producer.role} · ${ex.producer.taskLabel} inst ${ex.producer.instanceId}</p>` : '<p class="empty">No proven producer edge.</p>'}
+    </div>
+    <div>
+      <h2>Interpretation</h2>
+      <p class="fact"><span class="tag inferred">Inferred</span>From dependency edge + durations: SM 3 MMA is serialized behind SM 0 GEMM inst 1.</p>
+      <p class="fact"><span class="tag">Hypothesis</span>Shorten producer work or relax the counter coupling — then re-measure. Not a cache diagnosis.</p>
+      ${state.trace.run.fixtureNarration ? `<p class="empty" style="margin-top:10px">Fixture narration (not a finding): ${state.trace.run.fixtureNarration}</p>` : ''}
+    </div>
+    <div class="next">
+      <h2>${showSource ? 'Source & next' : 'Next'}</h2>
+      ${showSource && sources[0] ? `<pre class="code"><span class="tag source">Source</span>${sources[0].path}${sources[0].startLine ? ':' + sources[0].startLine : ''}\n${(sources[0].excerpt || '').replace(/\\n/g, '\n')}</pre>` : '<p class="empty">No source mapping for this selection.</p>'}
+      <button type="button" id="actProducer"><strong>Follow producer</strong><span>Focus SM 0 MMA instance 1 that releases the counter.</span></button>
+      <button type="button" id="actOverview"><strong>Return to overview</strong><span>Restore full window and silhouette rail.</span></button>
+    </div>`;
+  document.getElementById('actProducer')?.addEventListener('click', () => setMode('producer'));
+  document.getElementById('actOverview')?.addEventListener('click', () => setMode('overview'));
+}
+
+function bindBands() {
+  document.querySelectorAll('.band').forEach((el) => {
+    el.addEventListener('click', () => {
+      state.selected = { type: el.getAttribute('data-type'), id: el.getAttribute('data-id') };
+      if (state.selected.id === WAIT_ID) setMode('focus');
+      else if (state.selected.id === PRODUCER_ID) setMode('producer');
+      else render();
+    });
+  });
+}
+
+function render() {
+  const norm = normalizeTrace(state.trace);
+  // use normalized spans in state.trace clone for rendering
+  const view = {
+    ...state.trace,
+    spans: norm.spans,
+    waits: norm.waits,
+  };
+  const coverage = smCoverage({ ...state.trace, spans: norm.spans, waits: norm.waits });
+  state.window = coverage.window;
+  const taskById = Object.fromEntries(state.trace.tasks.map((t) => [t.id, t]));
+  document.body.classList.toggle('mode-gaps', state.mode === 'gaps');
+  document.querySelector('.rail-label').textContent =
+    state.mode === 'gaps' ? 'All SMs · coverage comparison' : 'Other SMs · activity silhouette';
+  renderAxis();
+  renderSilhouettes(norm, taskById, coverage);
+  const pair = document.getElementById('pair');
+  pair.classList.toggle('gaps-mode', state.mode === 'gaps');
+  document.getElementById('actorProducer').innerHTML = renderActor(0, 'producer', norm, taskById, coverage);
+  document.getElementById('actorConsumer').innerHTML = renderActor(3, 'consumer', norm, taskById, coverage);
+  renderGapsStrip(coverage);
+  bindBands();
+  renderInspector();
+  requestAnimationFrame(drawBeam);
+  if (state.mode === 'focus') {
+    document.getElementById('headline').textContent = 'Why SM 3 waited on SM 0';
+    document.getElementById('lede').textContent = 'Measured counter wait (280 ticks). Causal beam links producer GEMM instance 1 on SM 0 to the consumer MMA on SM 3.';
+  } else if (state.mode === 'producer') {
+    document.getElementById('headline').textContent = 'Producer · SM 0 MMA instance 1';
+    document.getElementById('lede').textContent = 'Long second GEMM on SM 0 holds the counter. Consumer wait ends when this span completes.';
+  } else if (state.mode === 'source') {
+    document.getElementById('headline').textContent = 'Source linked to the wait';
+    document.getElementById('lede').textContent = 'Compiler/source refs from the evidence document — incomplete maps stay explicit.';
+  } else if (state.mode === 'gaps') {
+    document.getElementById('headline').textContent = 'Coverage gaps · missing evidence';
+    document.getElementById('lede').textContent = 'Unobserved ticks are capture holes. They must never be read as idle, stall, or a peer finding to the SM 3 wait.';
+  } else {
+    document.getElementById('headline').textContent = 'Megakernel execution · pair stage';
+    document.getElementById('lede').textContent = 'Producer and consumer SMs own the stage. Other SMs remain silhouettes until you need them.';
+  }
+}
+
+async function main() {
+  state.trace = await fetch('./fixtures/sample-trace.json').then((r) => r.json());
+  document.getElementById('btnOverview').addEventListener('click', () => setMode('overview'));
+  document.getElementById('btnFocus').addEventListener('click', () => setMode('focus'));
+  document.getElementById('btnProducer').addEventListener('click', () => setMode('producer'));
+  document.getElementById('btnSource').addEventListener('click', () => setMode('source'));
+  document.getElementById('btnGaps').addEventListener('click', () => setMode('gaps'));
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') setMode('overview');
+    if (e.key === 'Enter' && state.mode === 'focus') setMode('producer');
+    if (e.key === 'g' && !e.metaKey && !e.ctrlKey) setMode('gaps');
+  });
+  window.addEventListener('resize', () => requestAnimationFrame(drawBeam));
+  setMode('focus');
+}
+
+main().catch((err) => {
+  document.body.textContent = String(err);
+});
+  </script>
+</body>
+</html>

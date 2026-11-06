@@ -1,0 +1,40 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/tool-gpu-evidence/README.md
+/:
+  en: 1a7f82aef18c6846
+  zh: d0e6a12c6cf74279
+/deepseek-ai-dsh-tool-gpu-evidence:
+  en: 4b6419a787acf4dd
+  zh: 81650a1eb307b26d
+/deepseek-ai-dsh-tool-gpu-evidence/summary:
+  en: 2a257888af8e28d7
+  zh: 31c06bbf302324bf
+/deepseek-ai-dsh-tool-gpu-evidence/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: b5f01e7b15f366d0
+/deepseek-ai-dsh-tool-gpu-evidence/use-this-package:
+  en: bfd5eb38580d7a75
+  zh: bf2d101e1072a2b2
+/deepseek-ai-dsh-tool-gpu-evidence/understand-the-implementation:
+  en: 075cafb18da1f159
+  zh: ed2070ba8a24b1ab
+/deepseek-ai-dsh-tool-gpu-evidence/further-exploration:
+  en: 5b6baecfeb4209ff
+  zh: 22b8e12eddb3e582
+/deepseek-ai-dsh-tool-gpu-evidence/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-tool-gpu-evidence/model-experience/system-prompt:
+  en: cf78b9dd5596495f
+  zh: bd44560f8c2435e8
+/deepseek-ai-dsh-tool-gpu-evidence/model-experience/tools:
+  en: 85e49d69ce389b9d
+  zh: a690150affa827e7
+/deepseek-ai-dsh-tool-gpu-evidence/known-limitations-and-deferred-work:
+  en: 0e162abb36e0663f
+  zh: 52e62a0cb4f66e14
+/deepseek-ai-dsh-tool-gpu-evidence/dev-note:
+  en: f149c04d6b663aaf
+  zh: dad734e9fd4735ec

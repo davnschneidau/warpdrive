@@ -1,23 +1,12 @@
-# GPU Visualization UX Prototype
+# GPU Visualization UX Prototype (archived)
 
-Interactive, harness-inspired prototype for evaluating Explanation Scenes before product implementation.
+**Superseded for the product milestone.** Warpdrive’s first integrated investigation is the **Memory Workload** dock:
 
-## Run
+→ [`packages/experimental/gpu-investigation-bundle`](../../packages/experimental/gpu-investigation-bundle/README.md)
+→ Architecture: [`../warpdrive-gpu/ARCHITECTURE.md`](../warpdrive-gpu/ARCHITECTURE.md)
 
-```sh
-python3 -m http.server 8765 --bind 127.0.0.1 --directory prototypes/gpu-viz-ux
-```
-
-Open `http://127.0.0.1:8765/`.
-
-## What this demonstrates
-
-- Flexible workspace modes (code-first, visual-first, chat-first, balanced) mapped onto DSH’s three-column AppFrame + right dock
-- Composable Scene IR: recipes seed scenes; the agent adds glyphs/relations/beats dynamically under grounding rules
-- Warp-specialized GEMM investigation that evolves through questions, selection, stepping, and a simulated code change
-- Grounding taxonomy: **compiled** · **annotated** · **modeled** (measurement reserved, not required for this slice)
-- Fixture “compile artifacts” under `fixtures/` standing in for real `nvcc`/`ptxas`/`cuobjdump` until a CUDA host is available
+This folder retains explanation-scene / Stage Theater probes as historical contrast only. Do not extend them as the primary UX.
 
 ## Not product code
 
-This folder is a design probe. It does not mount Cordis plugins or change shipped profiles.
+Does not mount Cordis plugins or change shipped profiles.

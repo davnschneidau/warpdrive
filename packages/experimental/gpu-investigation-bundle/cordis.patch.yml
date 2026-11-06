@@ -1,0 +1,7 @@
+- insert:
+    - id: tool-gpu-evidence
+      name: '@deepseek-ai/dsh-tool-gpu-evidence'
+      disabled: false
+    - id: client-ui-gpu-investigation
+      name: '@deepseek-ai/dsh-client-ui-gpu-investigation'
+      disabled: false
