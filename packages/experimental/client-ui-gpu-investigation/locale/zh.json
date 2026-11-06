@@ -1,0 +1,25 @@
+{
+  "meta": {
+    "title": "GPU 内存调查",
+    "description": "基于 Warpdrive 证据文档检查内存层次流量、指标与源码关联。"
+  },
+  "tab": {
+    "title": "GPU 内存",
+    "description": "当前证据文档的内存负载调查。"
+  },
+  "ui": {
+    "loop": "观察 · 理解 · 调查 · 修改 · 编译 · 测量 · 对比",
+    "fixtureBanner": "代表性夹具——并非本机上的实时 Nsight 采集。",
+    "overview": "总览",
+    "selection": "选中项",
+    "metrics": "指标",
+    "instructions": "指令",
+    "sources": "源码/产物",
+    "raw": "原始证据路径",
+    "compare": "与候选夹具对比",
+    "compareTitle": "实验对比",
+    "incompatible": "对比上下文不可靠",
+    "emptySelection": "选择一条内存路径或发现项以检查支撑证据。",
+    "backOverview": "返回总览"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "meta": {
+    "title": "GPU memory investigation",
+    "description": "Inspect memory hierarchy traffic, metrics, and source correlations from Warpdrive evidence documents."
+  },
+  "tab": {
+    "title": "GPU memory",
+    "description": "Memory workload investigation for the active evidence document."
+  },
+  "ui": {
+    "loop": "Observe · Understand · Investigate · Modify · Compile · Measure · Compare",
+    "fixtureBanner": "Representative fixture — not a live Nsight capture on this machine.",
+    "overview": "Overview",
+    "selection": "Selection",
+    "metrics": "Metrics",
+    "instructions": "Instructions",
+    "sources": "Sources",
+    "raw": "Raw evidence path",
+    "compare": "Compare to candidate fixture",
+    "compareTitle": "Experiment compare",
+    "incompatible": "Comparison context is unreliable",
+    "emptySelection": "Select a memory path or finding to inspect supporting evidence.",
+    "backOverview": "Back to overview"
+  }
+}
