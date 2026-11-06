@@ -1,0 +1,176 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deepseek-harness.local/gpu-scene-ir/v0.json",
+  "title": "GpuExplanationSceneDocumentV0",
+  "description": "Composable Explanation Scene IR. Recipes are factories that emit documents; agents may add any validated glyphs/relations/beats afterward.",
+  "type": "object",
+  "required": ["schemaVersion", "id", "title", "glyphs", "relations", "groundingPolicy"],
+  "properties": {
+    "schemaVersion": { "const": "0.1.0" },
+    "id": { "type": "string", "minLength": 1 },
+    "title": { "type": "string" },
+    "recipeOrigin": {
+      "description": "Optional seed recipe id. Absence means free composition.",
+      "type": "string"
+    },
+    "layout": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "enum": ["flow-horizontal", "flow-vertical", "hierarchy", "spatial-memory", "triad", "free"]
+        },
+        "gap": { "type": "number" }
+      }
+    },
+    "camera": {
+      "type": "object",
+      "properties": {
+        "level": { "enum": ["story", "structure", "mechanism", "artifact"] },
+        "focusIds": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "glyphs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/glyph" }
+    },
+    "relations": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/relation" }
+    },
+    "beats": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/beat" }
+    },
+    "bindings": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": { "$ref": "#/$defs/artifactRef" }
+      }
+    },
+    "groundingPolicy": {
+      "type": "object",
+      "required": ["denyUngroundedHardwareClaims"],
+      "properties": {
+        "denyUngroundedHardwareClaims": { "type": "boolean" },
+        "allowModeledMotion": { "type": "boolean", "default": true }
+      }
+    },
+    "assumptions": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "$defs": {
+    "grounding": {
+      "enum": ["compiled", "annotated", "modeled", "measured", "documented"]
+    },
+    "artifactRef": {
+      "type": "object",
+      "required": ["kind", "id"],
+      "properties": {
+        "kind": {
+          "enum": [
+            "sourceRange",
+            "ptxRange",
+            "sassRange",
+            "resourceReport",
+            "targetPackFact",
+            "annotation",
+            "profileRun"
+          ]
+        },
+        "id": { "type": "string" }
+      }
+    },
+    "glyph": {
+      "type": "object",
+      "required": ["id", "type", "label", "grounding"],
+      "properties": {
+        "id": { "type": "string" },
+        "type": {
+          "enum": [
+            "Warp",
+            "Warpgroup",
+            "RoleLane",
+            "SmRegion",
+            "TensorCore",
+            "RegisterFile",
+            "MemoryRegion",
+            "BufferSlot",
+            "Barrier",
+            "Transfer",
+            "Tensor",
+            "Tile",
+            "InstrLane",
+            "ResourceBudget",
+            "CompareBand",
+            "Caption",
+            "Group"
+          ]
+        },
+        "label": { "type": "string" },
+        "grounding": { "$ref": "#/$defs/grounding" },
+        "props": { "type": "object" },
+        "bindingKeys": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": ["TensorCore", "RegisterFile", "Barrier", "ResourceBudget"]
+              },
+              "grounding": { "const": "compiled" }
+            },
+            "required": ["type", "grounding"]
+          },
+          "then": {
+            "properties": {
+              "bindingKeys": { "minItems": 1 }
+            }
+          }
+        }
+      ]
+    },
+    "relation": {
+      "type": "object",
+      "required": ["id", "from", "to", "kind", "grounding"],
+      "properties": {
+        "id": { "type": "string" },
+        "from": { "type": "string" },
+        "to": { "type": "string" },
+        "kind": {
+          "enum": [
+            "produces",
+            "consumes",
+            "waitsOn",
+            "signals",
+            "owns",
+            "mapsTo",
+            "transfers",
+            "compares"
+          ]
+        },
+        "grounding": { "$ref": "#/$defs/grounding" },
+        "style": { "enum": ["solid", "dashed"] }
+      }
+    },
+    "beat": {
+      "type": "object",
+      "required": ["id", "label", "reveal", "grounding"],
+      "properties": {
+        "id": { "type": "string" },
+        "label": { "type": "string" },
+        "caption": { "type": "string" },
+        "reveal": { "type": "array", "items": { "type": "string" } },
+        "focus": { "type": "array", "items": { "type": "string" } },
+        "grounding": { "$ref": "#/$defs/grounding" }
+      }
+    }
+  }
+}
