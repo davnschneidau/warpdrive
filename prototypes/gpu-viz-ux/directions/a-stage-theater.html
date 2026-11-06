@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Direction A · Stage Theater</title>
+  <link rel="stylesheet" href="./tokens.css" />
+  <style>
+    body { display: grid; grid-template-rows: 48px 1fr; height: 100vh; min-width: 1280px; }
+    .top {
+      display: flex; align-items: center; gap: 16px; padding: 0 16px;
+      border-bottom: 0.5px solid var(--border); background: var(--bg-1);
+    }
+    .brand { font-weight: 600; }
+    .brand span { color: var(--text-3); font-weight: 500; margin-left: 8px; }
+    .top .grow { flex: 1; }
+    .shell {
+      display: grid; grid-template-columns: 300px 1fr 340px; min-height: 0;
+    }
+    .col {
+      min-height: 0; display: flex; flex-direction: column;
+      background: var(--bg-1); border-right: 0.5px solid var(--border);
+    }
+    .col:last-child { border-right: 0; border-left: 0.5px solid var(--border); }
+    .col-h {
+      padding: 10px 14px; font-weight: 600;
+      border-bottom: 0.5px solid var(--border-2);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .code, .chat { flex: 1; overflow: auto; padding: 12px 14px; }
+    .code {
+      font-family: var(--mono); font-size: 12px; line-height: 1.55; color: var(--text-2);
+      white-space: pre-wrap; background: var(--bg-1);
+    }
+    .code .hl {
+      background: rgba(65,118,230,0.14); outline: 1px solid rgba(65,118,230,0.25);
+      border-radius: 4px; display: inline;
+    }
+    .msg { margin-bottom: 12px; }
+    .msg.user .b {
+      margin-left: 24px; background: rgb(237,243,254); color: var(--brand-ink);
+      border-radius: 14px; padding: 10px 12px;
+    }
+    .msg.ai .b {
+      background: var(--bg-2); border-radius: 14px; padding: 10px 12px; color: var(--text-2);
+    }
+    .stage {
+      flex: 1; min-height: 0; display: flex; flex-direction: column;
+      background: linear-gradient(180deg, var(--bg) 0%, var(--bg-1) 40%);
+    }
+    .stage-toolbar {
+      display: flex; gap: 8px; align-items: center; padding: 10px 16px;
+      border-bottom: 0.5px solid var(--border-2);
+    }
+    .viz {
+      flex: 1; min-height: 0; padding: 8px 12px 16px; overflow: auto;
+      display: flex; align-items: stretch; justify-content: center;
+    }
+    svg.theater { width: 100%; max-width: 1100px; height: auto; }
+    .caption {
+      margin: 0 16px 16px; padding: 12px 14px; border-radius: var(--radius);
+      background: var(--bg-1); box-shadow: var(--elev); color: var(--text-2);
+    }
+    .caption strong { color: var(--text); }
+    .legend { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="brand">DeepSeek Harness <span>Direction A · Stage Theater</span></div>
+    <div class="grow"></div>
+    <a href="./index.html" style="color:var(--brand);text-decoration:none;font-weight:500">All directions</a>
+  </header>
+  <div class="shell">
+    <aside class="col">
+      <div class="col-h">nvfp4_gemm_ws.cu <span class="pill annotated">annotated roles</span></div>
+      <pre class="code" id="code"></pre>
+    </aside>
+    <main class="stage">
+      <div class="stage-toolbar">
+        <button data-beat="-1" class="primary" id="btn-ask">Explain GEMM</button>
+        <button data-beat="0">Overview</button>
+        <button data-beat="1">Loader fills</button>
+        <button data-beat="2">Barrier releases</button>
+        <button data-beat="3">MMA consumes</button>
+        <button data-beat="4">Epilogue drains</button>
+        <button data-beat="5">After +1 stage</button>
+        <span class="grow"></span>
+        <span class="pill compiled" id="budget">168 regs · 243 KB SMEM</span>
+      </div>
+      <div class="viz" id="viz"></div>
+      <div class="caption" id="caption"></div>
+    </main>
+    <aside class="col">
+      <div class="col-h">Conversation</div>
+      <div class="chat" id="chat"></div>
+    </aside>
+  </div>
+  <script>
+const CODE = `// @gpu.role producer warp=1
+// @gpu.role mma     warp=2
+// @gpu.role epilogue warps=4..11
+// @gpu.tile BM=128 BN=256 BK=256 STAGES=4
+
+__global__ void __launch_bounds__(384,1)
+nvfp4_gemm_ws(...) {
+  switch (warp) {
+  case 1:  <span class="hl" id="loc-prod">producer(s, tmA, tmB, ...)</span>; break;
+  case 2:  <span class="hl" id="loc-mma">mma_issuer(s, tmem, ...)</span>; break;
+  default: <span class="hl" id="loc-epi">epilogue(s, tmem, ...)</span>; break;
+  }
+}`;
+
+const state = { beat: 0, selected: null, stages: 4, conflict: false };
+
+function lanes(x, y, n, color, active) {
+  let s = '';
+  for (let i = 0; i < n; i++) {
+    const cx = x + (i % 16) * 7;
+    const cy = y + Math.floor(i / 16) * 7;
+    const on = active ? 1 : 0.25;
+    s += `<circle cx="${cx}" cy="${cy}" r="2.2" fill="${color}" opacity="${on}"/>`;
+  }
+  return s;
+}
+
+function tileGrid(x, y, w, h, cols, rows, fill, opacity) {
+  let s = `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="4" fill="${fill}" opacity="${opacity}" stroke="rgba(0,0,0,0.12)"/>`;
+  const cw = w / cols, rh = h / rows;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      s += `<rect x="${x + c * cw + 0.5}" y="${y + r * rh + 0.5}" width="${cw - 1}" height="${rh - 1}" fill="rgba(255,255,255,${0.08 + ((r + c) % 2) * 0.06})" />`;
+    }
+  }
+  return s;
+}
+
+function render() {
+  document.getElementById('code').innerHTML = CODE;
+  const b = state.beat;
+  const filled = b >= 1 ? Math.min(state.stages, b === 1 ? 1 : b >= 3 ? 3 : 2) : 0;
+  const barrierOpen = b >= 2;
+  const mmaActive = b >= 3;
+  const epiActive = b >= 4;
+  const stageCount = state.conflict ? 5 : state.stages;
+
+  // Highlight code
+  ['loc-prod','loc-mma','loc-epi'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.toggle('hl',
+      (id === 'loc-prod' && (b <= 2 || state.selected === 'producer')) ||
+      (id === 'loc-mma' && (b === 3 || state.selected === 'mma')) ||
+      (id === 'loc-epi' && (b >= 4 || state.selected === 'epilogue'))
+    );
+  });
+
+  const W = 1040, H = 620;
+  let stagesSvg = '';
+  for (let i = 0; i < stageCount; i++) {
+    const x = 210 + i * 118;
+    const y = 250;
+    const isFilled = i < filled;
+    const isHot = (b === 1 && i === 0) || (b === 3 && i === 0) || state.selected === `stage${i}`;
+    stagesSvg += `
+      <g class="click" data-id="stage${i}" style="cursor:pointer">
+        <rect x="${x}" y="${y}" width="104" height="120" rx="10"
+          fill="${isFilled ? 'rgba(245,158,11,0.18)' : 'rgba(0,0,0,0.03)'}"
+          stroke="${isHot ? 'var(--brand)' : 'rgba(0,0,0,0.12)'}" stroke-width="${isHot ? 2 : 1}"/>
+        <text x="${x + 12}" y="${y + 18}" font-size="11" fill="#848587">stage ${i}</text>
+        ${isFilled
+          ? tileGrid(x + 10, y + 28, 84, 72, 8, 6, 'rgb(65,118,230)', 0.85)
+          : `<text x="${x + 28}" y="${y + 70}" font-size="12" fill="#a3a3a3">empty</text>`}
+        ${isFilled ? `<text x="${x + 14}" y="${y + 112}" font-size="10" fill="#416ee6">A/B tile · 128×256</text>` : ''}
+      </g>`;
+  }
+
+  const gateX = 210 + Math.min(filled, 1) * 0 + 160;
+  const svg = `
+  <svg class="theater" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+        <path d="M0 0 L10 5 L0 10 z" fill="rgba(0,0,0,0.35)"/>
+      </marker>
+      <linearGradient id="hbmG" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#64748b"/><stop offset="100%" stop-color="#94a3b8"/>
+      </linearGradient>
+    </defs>
+
+    <!-- HBM tensors -->
+    <g class="click" data-id="hbm" style="cursor:pointer">
+      <text x="40" y="36" font-size="12" font-weight="600" fill="#848587">HBM</text>
+      ${tileGrid(40, 48, 120, 90, 10, 8, 'url(#hbmG)', 0.55)}
+      <text x="48" y="155" font-size="12" font-weight="600">Tensor A</text>
+      ${tileGrid(180, 48, 140, 90, 12, 8, 'url(#hbmG)', 0.55)}
+      <text x="188" y="155" font-size="12" font-weight="600">Tensor B</text>
+      <text x="40" y="176" font-size="11" fill="#848587">annotated tile BM×BK / BN×BK · not a memory dump</text>
+    </g>
+
+    <!-- TMA stream -->
+    <path d="M160 140 C160 200, 200 220, 250 245" fill="none" stroke="${b >= 1 ? '#416ee6' : 'rgba(0,0,0,0.15)'}"
+      stroke-width="2.5" stroke-dasharray="${b >= 1 && b < 3 ? '6 4' : '0'}" marker-end="url(#arr)">
+      ${b === 1 ? '<animate attributeName="stroke-dashoffset" from="40" to="0" dur="1.2s" repeatCount="indefinite"/>' : ''}
+    </path>
+    <text x="168" y="210" font-size="11" fill="#416ee6" font-weight="600">TMA</text>
+
+    <!-- Producer warp strip -->
+    <g class="click" data-id="producer" style="cursor:pointer">
+      <rect x="40" y="210" width="150" height="64" rx="12"
+        fill="${b <= 2 ? 'rgba(65,118,230,0.12)' : 'rgba(65,118,230,0.05)'}"
+        stroke="${state.selected==='producer'?'#416ee6':'rgba(65,118,230,0.35)'}" stroke-width="${state.selected==='producer'?2:1}"/>
+      <text x="52" y="232" font-size="12" font-weight="600" fill="#416ee6">Producer warp</text>
+      <text x="52" y="248" font-size="10" fill="#848587">32 lanes · annotated role</text>
+      ${lanes(52, 254, 32, '#416ee6', b <= 2)}
+    </g>
+
+    <!-- SMEM ring label -->
+    <text x="210" y="238" font-size="12" font-weight="600" fill="#b45309">Shared memory ring · ${stageCount} stages</text>
+    ${stagesSvg}
+    ${state.conflict ? `<text x="210" y="390" font-size="12" fill="#dc2626" font-weight="600">Conflict: 5 × stage bytes exceed 256 KB operand window (compiled math)</text>` : ''}
+
+    <!-- Barrier -->
+    <g class="click" data-id="barrier" style="cursor:pointer">
+      <rect x="460" y="400" width="160" height="52" rx="10"
+        fill="${barrierOpen ? 'rgba(34,197,94,0.12)' : 'rgba(245,158,11,0.14)'}"
+        stroke="${barrierOpen ? '#22c55e' : '#f59e0b'}" stroke-width="1.5"/>
+      <text x="476" y="422" font-size="12" font-weight="600">${barrierOpen ? 'full[0] released' : 'full[0] waiting'}</text>
+      <text x="476" y="438" font-size="10" fill="#848587">${barrierOpen ? 'modeled phase complete' : 'producer expect_tx pending'}</text>
+      <!-- gate metaphor -->
+      <path d="M430 310 L430 ${barrierOpen ? 360 : 390}" stroke="${barrierOpen ? '#22c55e' : '#f59e0b'}" stroke-width="3" stroke-linecap="round"/>
+      <path d="M430 310 L${barrierOpen ? 455 : 448} ${barrierOpen ? 340 : 330}" stroke="${barrierOpen ? '#22c55e' : '#f59e0b'}" stroke-width="3" stroke-linecap="round"/>
+    </g>
+
+    <!-- MMA -->
+    <g class="click" data-id="mma" style="cursor:pointer">
+      <rect x="680" y="250" width="170" height="120" rx="12"
+        fill="${mmaActive ? 'rgba(124,58,237,0.14)' : 'rgba(124,58,237,0.05)'}"
+        stroke="${state.selected==='mma'?'#7c3aed':'rgba(124,58,237,0.35)'}" stroke-width="${state.selected==='mma'?2:1}"/>
+      <text x="696" y="274" font-size="12" font-weight="600" fill="#7c3aed">MMA issuer</text>
+      <text x="696" y="292" font-size="10" fill="#848587">1 warp · elect lane issues</text>
+      ${lanes(696, 302, 32, '#7c3aed', mmaActive)}
+      <text x="696" y="356" font-size="11" fill="#7c3aed">${mmaActive ? 'issuing tcgen05 / UMMA' : 'blocked on barrier'}</text>
+    </g>
+
+    <!-- Accumulators -->
+    <g>
+      <rect x="880" y="220" width="72" height="88" rx="8" fill="${mmaActive ? 'rgba(124,58,237,0.2)' : 'rgba(0,0,0,0.03)'}" stroke="rgba(0,0,0,0.1)"/>
+      <text x="890" y="240" font-size="10" fill="#848587">acc0</text>
+      ${mmaActive ? tileGrid(890, 248, 52, 48, 4, 4, '#7c3aed', 0.7) : ''}
+      <rect x="880" y="320" width="72" height="88" rx="8" fill="${epiActive ? 'rgba(14,165,160,0.12)' : 'rgba(0,0,0,0.03)'}" stroke="rgba(0,0,0,0.1)"/>
+      <text x="890" y="340" font-size="10" fill="#848587">acc1</text>
+      ${epiActive ? `<text x="892" y="372" font-size="10" fill="#0ea5a0">draining</text>` : (mmaActive ? tileGrid(890, 348, 52, 40, 4, 3, '#7c3aed', 0.35) : '')}
+    </g>
+
+    <!-- Epilogue -->
+    <g class="click" data-id="epilogue" style="cursor:pointer">
+      <rect x="680" y="430" width="270" height="90" rx="12"
+        fill="${epiActive ? 'rgba(14,165,160,0.14)' : 'rgba(14,165,160,0.05)'}"
+        stroke="${state.selected==='epilogue'?'#0ea5a0':'rgba(14,165,160,0.35)'}" stroke-width="${state.selected==='epilogue'?2:1}"/>
+      <text x="696" y="454" font-size="12" font-weight="600" fill="#0ea5a0">Epilogue warpgroups</text>
+      <text x="696" y="472" font-size="10" fill="#848587">8 warps · drain TMEM → BF16 → TMA store</text>
+      ${lanes(696, 484, 64, '#0ea5a0', epiActive)}
+    </g>
+
+    <!-- Resource strip -->
+    <rect x="40" y="560" width="960" height="36" rx="8" fill="#f5f6f7"/>
+    <text x="56" y="582" font-size="12" fill="#545557">
+      ${state.conflict
+        ? 'Compiled: proposed 5 stages ≈ 303 KB · documented tcgen05 window 256 KB → reject'
+        : 'Compiled from ptxas fixture: 168 registers/thread · 243 KB SMEM · 384 threads'}
+    </text>
+  </svg>`;
+
+  document.getElementById('viz').innerHTML = svg;
+  document.querySelectorAll('.click').forEach(el => {
+    el.addEventListener('click', () => {
+      state.selected = el.getAttribute('data-id');
+      pushChat('user', `Focus: ${state.selected}`);
+      pushChat('ai', explainSelection(state.selected));
+      render();
+    });
+  });
+
+  const captions = [
+    { t: 'Overview', d: 'A spatial Stage Theater: HBM tiles feed a shared-memory ring. Three warp roles cooperate. Lane dots show occupancy; stage cells show whether a tile is resident.' },
+    { t: 'Loader fills stage 0', d: 'Producer issues TMA. Stage 0 now holds an A/B tile grid (annotated shape). Other stages remain empty. Motion on the TMA path is modeled, not timed.' },
+    { t: 'Barrier releases', d: 'The gate metaphor opens when full[0] completes. Consumers were waiting; this beat is modeled from mbarrier semantics, bound to PTX/SASS wait sites.' },
+    { t: 'MMA consumes', d: 'MMA issuer lanes light up and pull from stage 0 into acc0. Tensor Core path is documented; issue cadence is not cycle-accurate.' },
+    { t: 'Epilogue drains', d: 'While MMA can fill acc1, epilogue drains acc0 — double buffering made visible as two accumulator tiles.' },
+    { t: 'What if +1 stage?', d: 'Same theater after a proposed STAGES=5. Compiled byte math against the documented 256 KB window shows a hard conflict — no fake success animation.' },
+  ];
+  const c = captions[Math.min(b, captions.length - 1)];
+  document.getElementById('caption').innerHTML = `<strong>${c.t}</strong> — ${c.d}
+    <div class="legend">
+      <span class="pill annotated">Roles / tile shape · annotated</span>
+      <span class="pill modeled">TMA / barrier timing · modeled</span>
+      <span class="pill compiled">Resources / window · compiled</span>
+    </div>`;
+  document.getElementById('budget').textContent = state.conflict
+    ? 'Conflict · SMEM window'
+    : '168 regs · 243 KB SMEM';
+  document.getElementById('budget').className = 'pill ' + (state.conflict ? 'modeled' : 'compiled');
+}
+
+function explainSelection(id) {
+  if (id?.startsWith('stage')) {
+    const i = +id.replace('stage','');
+    return `Stage ${i} is one ring slot in SMEM. When filled, it holds the annotated 128×256 tile payload for this K-step. Ownership flips via mbarrier — not proven by the tile drawing alone.`;
+  }
+  if (id === 'producer') return 'Annotated producer warp: 32 lanes shown. Code highlight jumps to producer().';
+  if (id === 'mma') return 'Annotated MMA issuer. Elect-one lane issues MMA; others converge. Linked to mma_issuer() in source.';
+  if (id === 'epilogue') return 'Annotated epilogue warpgroups. They drain accumulators while MMA may fill the twin buffer.';
+  if (id === 'barrier') return 'Barrier state is a modeled walkthrough of full[stage] parity, grounded by compiled mbarrier sites in PTX/SASS fixtures.';
+  if (id === 'hbm') return 'HBM tensors drawn as grids so tile extraction is spatial — not a flowchart label.';
+  return 'Selection updated.';
+}
+
+const chat = document.getElementById('chat');
+function pushChat(who, text) {
+  const d = document.createElement('div');
+  d.className = 'msg ' + (who === 'user' ? 'user' : 'ai');
+  d.innerHTML = `<div class="b">${text}</div>`;
+  chat.appendChild(d);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+document.querySelectorAll('[data-beat]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const v = +btn.getAttribute('data-beat');
+    if (v < 0) {
+      state.beat = 0; state.conflict = false; state.selected = null;
+      chat.innerHTML = '';
+      pushChat('user', 'Can you show me how these warps cooperate on this GEMM?');
+      pushChat('ai', 'Opening a Stage Theater: tiles, a shared-memory ring, warp lanes, and a barrier gate — not a row of labeled boxes. Roles are annotated intent; resources are compiled.');
+    } else {
+      state.beat = v;
+      state.conflict = v === 5;
+      if (v === 5) {
+        pushChat('user', 'What if I increase pipeline stages?');
+        pushChat('ai', 'Reusing the same spatial ring with five slots. Compiled stage-byte math conflicts with the documented 256 KB window — showing the failure, not inventing a win.');
+      } else if (v === 1) {
+        pushChat('user', 'Show me when the loader finishes.');
+        pushChat('ai', 'Stage 0 fills with a visible tile; TMA path animates (modeled).');
+      } else if (v === 2) {
+        pushChat('user', 'Why was MMA waiting?');
+        pushChat('ai', 'The barrier gate opens — full[0] release — so the wait reason is visible in the mechanism.');
+      }
+    }
+    render();
+  });
+});
+
+pushChat('ai', 'Direction A: Stage Theater. Press “Explain GEMM”, then step the pipeline. Click tiles, warps, or the barrier.');
+render();
+  </script>
+</body>
+</html>

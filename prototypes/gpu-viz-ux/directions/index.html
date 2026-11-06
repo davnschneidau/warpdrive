@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>GPU viz · design directions</title>
+  <link rel="stylesheet" href="./tokens.css" />
+  <style>
+    body { padding: 40px 48px; max-width: 900px; }
+    h1 { font-size: 28px; letter-spacing: -0.02em; margin: 0 0 8px; }
+    .lead { color: var(--text-2); font-size: 15px; margin-bottom: 28px; }
+    .card {
+      display: block; padding: 18px 20px; margin-bottom: 14px;
+      border-radius: 14px; background: var(--bg-1); box-shadow: var(--elev);
+      text-decoration: none; color: inherit; border: 0.5px solid var(--border-2);
+    }
+    .card:hover { border-color: rgba(65,118,230,0.35); }
+    .card h2 { margin: 0 0 6px; font-size: 17px; }
+    .card p { margin: 0; color: var(--text-2); }
+    .tag { display: inline-block; margin-top: 10px; font-size: 11px; font-weight: 600; color: var(--brand); }
+  </style>
+</head>
+<body>
+  <h1>Three visual directions</h1>
+  <p class="lead">
+    Disposable wireframes in <code>../captures</code> are superseded. These probes prioritize
+    spatial GPU metaphors — tiles, warp lanes, stage residency, barriers — inside a harness-like shell.
+  </p>
+  <a class="card" href="./a-stage-theater.html">
+    <h2>A · Stage Theater</h2>
+    <p>Code | dominant spatial pipeline | chat. HBM tiles, SMEM stage cells, warp lane strips, barrier gate, accumulator twin buffers.</p>
+    <span class="tag">Best for teaching mechanism in a familiar IDE triad</span>
+  </a>
+  <a class="card" href="./b-living-canvas.html">
+    <h2>B · Living Kernel Canvas</h2>
+    <p>Full-bleed pan/zoom machine. Code as a dock, chat as a floating collaborator. Memory-first spatial layout.</p>
+    <span class="tag">Best for exploration and “where is the tile?” questions</span>
+  </a>
+  <a class="card" href="./c-cutaway-cta.html">
+    <h2>C · Cutaway CTA</h2>
+    <p>Vertical engineering cutaway of one CTA with a time scrubber. Linked source + AI side column.</p>
+    <span class="tag">Best for scrubbing causality and specialization layers</span>
+  </a>
+</body>
+</html>

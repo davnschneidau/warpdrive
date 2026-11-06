@@ -1,23 +1,25 @@
 # GPU Visualization UX Prototype
 
-Interactive, harness-inspired prototype for evaluating Explanation Scenes before product implementation.
+Design probes for Explanation Scenes before product implementation.
 
-## Run
+## Start here (current)
+
+High-fidelity **visual directions** (supersede the early wireframe captures):
 
 ```sh
-python3 -m http.server 8765 --bind 127.0.0.1 --directory prototypes/gpu-viz-ux
+python3 -m http.server 8765 --bind 127.0.0.1 --directory prototypes/gpu-viz-ux/directions
 ```
 
-Open `http://127.0.0.1:8765/`.
+Open `http://127.0.0.1:8765/` — Directions A / B / C.
 
-## What this demonstrates
+See `directions/EVALUATION.md` for the recommendation (synthesize A shell + B spatial memory + C scrubber).
 
-- Flexible workspace modes (code-first, visual-first, chat-first, balanced) mapped onto DSH’s three-column AppFrame + right dock
-- Composable Scene IR: recipes seed scenes; the agent adds glyphs/relations/beats dynamically under grounding rules
-- Warp-specialized GEMM investigation that evolves through questions, selection, stepping, and a simulated code change
-- Grounding taxonomy: **compiled** · **annotated** · **modeled** (measurement reserved, not required for this slice)
-- Fixture “compile artifacts” under `fixtures/` standing in for real `nvcc`/`ptxas`/`cuobjdump` until a CUDA host is available
+Scene IR schema and fixtures remain useful architecture probes (`scene-ir.schema.json`, `fixtures/`).
+
+## Discarded visual foundation
+
+`captures/` holds the early labeled-rectangle wireframes. Keep only as historical contrast; do not polish them.
 
 ## Not product code
 
-This folder is a design probe. It does not mount Cordis plugins or change shipped profiles.
+This folder does not mount Cordis plugins or change shipped profiles.
